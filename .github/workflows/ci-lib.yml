@@ -30,7 +30,7 @@ jobs:
       - name: Install dependencies
         run: |
           apt-get update
-          apt-get install --yes sqlite3
+          apt-get install --yes libsqlite3-dev
       - name: Build lib
         run: pack --no-prompt install sqlite3
       - name: Run test

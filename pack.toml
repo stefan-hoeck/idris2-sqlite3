@@ -1,0 +1,5 @@
+[custom.all.sqlite3]
+type   = "local"
+path   = "."
+ipkg   = "sqlite3.ipkg"
+test   = "test/test.ipkg"

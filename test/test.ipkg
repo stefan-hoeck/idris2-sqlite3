@@ -1,0 +1,12 @@
+package sqlite3-test
+version      = 0.0.1
+authors      = "stefan-hoeck"
+license      = "BSD-3 Clause"
+
+depends = sqlite3
+        , rio
+
+sourcedir = "src"
+
+executable = "sqlite3-test"
+main       = Main

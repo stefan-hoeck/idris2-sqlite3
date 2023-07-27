@@ -1,0 +1,20 @@
+package sqlite3
+version      = 0.0.1
+authors      = "stefan-hoeck"
+readme       = "README.md"
+license      = "BSD-3 Clause"
+brief        = "Idris2 bindings to the sqlite3 API"
+
+depends = base >= 0.6.0
+        , elab-util
+        , bytestring
+
+sourcedir = "src"
+
+modules = Sqlite3
+        , Sqlite3.Prim
+        , Sqlite3.Types
+
+prebuild = "make -C support"
+
+preinstall = "make -C support install"

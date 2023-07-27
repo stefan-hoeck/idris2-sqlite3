@@ -1,0 +1,5 @@
+build/
+lib/
+support/idris2-sqlite3.o
+support/libsqlite3-idris
+*.*~

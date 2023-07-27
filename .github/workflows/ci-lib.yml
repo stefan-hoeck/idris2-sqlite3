@@ -1,0 +1,37 @@
+---
+name: Build
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - '**'
+  pull_request:
+    branches:
+      - main
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Build ${{ github.repository }} with Idris2 latest
+    runs-on: ubuntu-latest
+    env:
+      PACK_DIR: /root/.pack
+    strategy:
+      fail-fast: false
+    container: ghcr.io/stefan-hoeck/idris2-pack:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install --yes libsqlite3-dev
+      - name: Build lib
+        run: pack --no-prompt install sqlite3
+      - name: Run test
+        run: pack --no-prompt test sqlite3

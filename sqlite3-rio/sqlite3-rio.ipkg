@@ -1,0 +1,13 @@
+package sqlite3-rio
+version      = 0.0.1
+authors      = "stefan-hoeck"
+readme       = "README.md"
+license      = "BSD-3 Clause"
+brief        = "RIO wrappers for the sqlite3 library"
+
+depends = sqlite3
+        , rio
+
+sourcedir = "src"
+
+modules = Control.RIO.Sqlite3

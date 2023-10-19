@@ -3,3 +3,8 @@ type   = "local"
 path   = "."
 ipkg   = "sqlite3.ipkg"
 test   = "test/test.ipkg"
+
+[custom.all.sqlite3-rio]
+type   = "local"
+path   = "sqlite3-rio"
+ipkg   = "sqlite3-rio.ipkg"

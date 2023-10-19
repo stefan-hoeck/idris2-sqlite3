@@ -13,37 +13,37 @@ import Derive.Prelude
 
 public export
 data SqlResult : Type where
-  SQLITE_OK         : SqlResult -- Successful result 
-  SQLITE_ERROR      : SqlResult -- Generic error 
-  SQLITE_INTERNAL   : SqlResult -- Internal logic error in SQLite 
-  SQLITE_PERM       : SqlResult -- Access permission denied 
-  SQLITE_ABORT      : SqlResult -- Callback routine requested an abort 
-  SQLITE_BUSY       : SqlResult -- The database file is locked 
-  SQLITE_LOCKED     : SqlResult -- A table in the database is locked 
-  SQLITE_NOMEM      : SqlResult -- A malloc() failed 
-  SQLITE_READONLY   : SqlResult -- Attempt to write a readonly database 
+  SQLITE_OK         : SqlResult -- Successful result
+  SQLITE_ERROR      : SqlResult -- Generic error
+  SQLITE_INTERNAL   : SqlResult -- Internal logic error in SQLite
+  SQLITE_PERM       : SqlResult -- Access permission denied
+  SQLITE_ABORT      : SqlResult -- Callback routine requested an abort
+  SQLITE_BUSY       : SqlResult -- The database file is locked
+  SQLITE_LOCKED     : SqlResult -- A table in the database is locked
+  SQLITE_NOMEM      : SqlResult -- A malloc() failed
+  SQLITE_READONLY   : SqlResult -- Attempt to write a readonly database
   SQLITE_INTERRUPT  : SqlResult -- Operation terminated by sqlite3_interrupt()
-  SQLITE_IOERR      : SqlResult -- Some kind of disk I/O error occurred 
-  SQLITE_CORRUPT    : SqlResult -- The database disk image is malformed 
-  SQLITE_NOTFOUND   : SqlResult -- Unknown opcode in sqlite3_file_control() 
-  SQLITE_FULL       : SqlResult -- Insertion failed because database is full 
-  SQLITE_CANTOPEN   : SqlResult -- Unable to open the database file 
-  SQLITE_PROTOCOL   : SqlResult -- Database lock protocol error 
-  SQLITE_EMPTY      : SqlResult -- Internal use only 
-  SQLITE_SCHEMA     : SqlResult -- The database schema changed 
-  SQLITE_TOOBIG     : SqlResult -- String or BLOB exceeds size limit 
-  SQLITE_CONSTRAINT : SqlResult -- Abort due to constraint violation 
-  SQLITE_MISMATCH   : SqlResult -- Data type mismatch 
-  SQLITE_MISUSE     : SqlResult -- Library used incorrectly 
-  SQLITE_NOLFS      : SqlResult -- Uses OS features not supported on host 
-  SQLITE_AUTH       : SqlResult -- Authorization denied 
-  SQLITE_FORMAT     : SqlResult -- Not used 
-  SQLITE_RANGE      : SqlResult -- 2nd parameter to sqlite3_bind out of range 
-  SQLITE_NOTADB     : SqlResult -- File opened that is not a database file 
-  SQLITE_NOTICE     : SqlResult -- Notifications from sqlite3_log() 
-  SQLITE_WARNING    : SqlResult -- Warnings from sqlite3_log() 
-  SQLITE_ROW        : SqlResult -- sqlite3_step() has another row ready 
-  SQLITE_DONE       : SqlResult -- sqlite3_step() has finished executing 
+  SQLITE_IOERR      : SqlResult -- Some kind of disk I/O error occurred
+  SQLITE_CORRUPT    : SqlResult -- The database disk image is malformed
+  SQLITE_NOTFOUND   : SqlResult -- Unknown opcode in sqlite3_file_control()
+  SQLITE_FULL       : SqlResult -- Insertion failed because database is full
+  SQLITE_CANTOPEN   : SqlResult -- Unable to open the database file
+  SQLITE_PROTOCOL   : SqlResult -- Database lock protocol error
+  SQLITE_EMPTY      : SqlResult -- Internal use only
+  SQLITE_SCHEMA     : SqlResult -- The database schema changed
+  SQLITE_TOOBIG     : SqlResult -- String or BLOB exceeds size limit
+  SQLITE_CONSTRAINT : SqlResult -- Abort due to constraint violation
+  SQLITE_MISMATCH   : SqlResult -- Data type mismatch
+  SQLITE_MISUSE     : SqlResult -- Library used incorrectly
+  SQLITE_NOLFS      : SqlResult -- Uses OS features not supported on host
+  SQLITE_AUTH       : SqlResult -- Authorization denied
+  SQLITE_FORMAT     : SqlResult -- Not used
+  SQLITE_RANGE      : SqlResult -- 2nd parameter to sqlite3_bind out of range
+  SQLITE_NOTADB     : SqlResult -- File opened that is not a database file
+  SQLITE_NOTICE     : SqlResult -- Notifications from sqlite3_log()
+  SQLITE_WARNING    : SqlResult -- Warnings from sqlite3_log()
+  SQLITE_ROW        : SqlResult -- sqlite3_step() has another row ready
+  SQLITE_DONE       : SqlResult -- sqlite3_step() has finished executing
   Unknown           : SqlResult -- error code unknown
 
 %runElab derive "SqlResult" [Show,Eq,Ord]
@@ -127,6 +127,7 @@ data SqlError : Type where
   ResultError    : SqlResult -> SqlError
   ColOutOfBounds : (cols, col : Bits32) -> SqlError
   DecodingError  : SqlColType -> String -> SqlError
+  NoMoreData     : SqlError
 
 %runElab derive "SqlError" [Show,Eq]
 

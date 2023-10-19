@@ -35,3 +35,5 @@ jobs:
         run: pack --no-prompt install sqlite3
       - name: Run test
         run: pack --no-prompt test sqlite3
+      - name: Build sqlite3-rio
+        run: pack --no-prompt install sqlite3-rio

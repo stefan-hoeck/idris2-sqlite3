@@ -31,7 +31,7 @@ void copy_buffer(int length, unsigned char* buf, unsigned char* bytes) {
 
 
 void sqlver(void) {
-    printf("%s\n", sqlite3_libversion()); 
+    printf("%s\n", sqlite3_libversion());
 }
 
 void* null(void) {
@@ -40,4 +40,12 @@ void* null(void) {
 
 int isNull(void* ptr) {
     return ptr==NULL;
+}
+
+int bind_buffer(sqlite3_stmt* stmt, int index, const void* buf, int length) {
+    return sqlite3_bind_blob(stmt, index, buf, length, SQLITE_TRANSIENT);
+}
+
+int bind_text(sqlite3_stmt* stmt, int index, const char* str) {
+    return sqlite3_bind_text(stmt, index, str, -1, SQLITE_TRANSIENT);
 }

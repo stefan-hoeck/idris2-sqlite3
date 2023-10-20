@@ -8,3 +8,9 @@ test   = "test/test.ipkg"
 type   = "local"
 path   = "sqlite3-rio"
 ipkg   = "sqlite3-rio.ipkg"
+
+[custom.all.bytestring]
+type   = "git"
+url    = "git@github.com:stefan-hoeck/idris2-bytestring.git"
+commit = "latest:main"
+ipkg   = "bytestring.ipkg"

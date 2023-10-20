@@ -17,18 +17,22 @@ idris_sqlite fn = "C:" ++ fn ++ ",libsqlite3-idris"
 --          Pointers
 --------------------------------------------------------------------------------
 
+||| Database pointer tag.
 export
 data DBPtr : Type where
 
+||| Pointer to an sqlite3 database.
 public export
 record DB where
   [noHints]
   constructor D
   db : Ptr DBPtr
 
+||| SQL statement pointer tag.
 export
 data StmtPtr : Type where
 
+||| Pointer to an SQL statement
 public export
 record Stmt where
   [noHints]
@@ -125,18 +129,22 @@ prim__sqlite3_column_count : Ptr StmtPtr -> PrimIO Bits32
 --          Pointers
 --------------------------------------------------------------------------------
 
+||| Free the given pointer.
 export %inline
 ptrFree : Ptr t -> IO ()
 ptrFree ptr = primIO $ prim__ptr_free $ prim__forgetPtr ptr
 
+||| Allocate a new pointer.
 export %inline
 newAnyPtr : IO AnyPtr
 newAnyPtr = primIO prim__newptr
 
+||| Allocate a new tagged pointer.
 export %inline
 newPtr : IO (Ptr t)
 newPtr = prim__castPtr <$> newAnyPtr
 
+||| Dereference the given pointer.
 export %inline
 dereference : Ptr (Ptr t) -> IO (Ptr t)
 dereference ptr =
@@ -146,6 +154,7 @@ export %inline
 strToPtr : String -> IO (Ptr String)
 strToPtr = primIO . prim__mkString
 
+||| The `null` pointer
 export %inline
 nullPtr : Ptr t
 nullPtr = prim__castPtr $ prim__null
@@ -160,6 +169,7 @@ export
 withPtrAlloc : (Ptr a -> IO b) -> IO b
 withPtrAlloc act = newPtr >>= (`withPtr` act)
 
+||| Convert an FFI string to an Idris string.
 export %inline
 ptrToStr : Ptr String -> IO String
 ptrToStr = primIO . prim__getString
@@ -168,6 +178,7 @@ ptrToStr = primIO . prim__getString
 --          Status and Errors
 --------------------------------------------------------------------------------
 
+||| Get the current error message.
 export %inline
 sqlite3ErrMsg : (d : DB) => IO String
 sqlite3ErrMsg = primIO $ prim__sqlite3_errmsg d.db
@@ -176,10 +187,12 @@ sqlite3ErrMsg = primIO $ prim__sqlite3_errmsg d.db
 --          Accessing Columns
 --------------------------------------------------------------------------------
 
+||| Get the current column count for the given statement.
 export %inline
 sqlite3ColumnCount : (s : Stmt) => IO Bits32
 sqlite3ColumnCount = primIO $ prim__sqlite3_column_count s.stmt
 
+||| Try to read the text stored in the current column.
 export
 sqlite3ColumnText : (s : Stmt) => (iCol : Bits32) -> IO (Maybe String)
 sqlite3ColumnText iCol = do
@@ -188,6 +201,7 @@ sqlite3ColumnText iCol = do
     0 => Just <$> ptrToStr ptr
     _ => pure Nothing
 
+||| Try to read the bytestring stored in the current column.
 export
 sqlite3ColumnBlob : (s : Stmt) => (iCol : Bits32) -> IO (Maybe ByteString)
 sqlite3ColumnBlob iCol = do
@@ -195,19 +209,22 @@ sqlite3ColumnBlob iCol = do
   case prim__nullAnyPtr ptr of
     0 => do
       n        <- primIO $ prim__sqlite3_column_bytes s.stmt iCol
-      Just buf <- newBuffer (cast n) | Nothing => pure Nothing 
-      primIO $ prim__copy_buffer n buf ptr 
+      Just buf <- newBuffer (cast n) | Nothing => pure Nothing
+      primIO $ prim__copy_buffer n buf ptr
       pure . Just $ unsafeByteString (cast n) buf
     _ => pure Nothing
 
+||| Read the floating point number stored in the current column.
 export %inline
 sqlite3ColumnDouble : (s : Stmt) => (iCol : Bits32) -> IO Double
 sqlite3ColumnDouble = primIO . prim__sqlite3_column_double s.stmt
 
+||| Read the 32bit integer stored in the current column.
 export %inline
 sqlite3ColumnInt32 : (s : Stmt) => (iCol : Bits32) -> IO Int32
 sqlite3ColumnInt32 = primIO . prim__sqlite3_column_int32 s.stmt
 
+||| Read the 64bit integer stored in the current column.
 export %inline
 sqlite3ColumnInt64 : (s : Stmt) => (iCol : Bits32) -> IO Int64
 sqlite3ColumnInt64 = primIO . prim__sqlite3_column_int64 s.stmt
@@ -216,18 +233,28 @@ sqlite3ColumnInt64 = primIO . prim__sqlite3_column_int64 s.stmt
 --          Working with Connections
 --------------------------------------------------------------------------------
 
+||| Tries to open a connection to the given database.
+|||
+||| `path` is typically a relative or absolute path on the file system
+||| pointing to the database we want to work on. If `path` equals `":memory:"`,
+||| a temporary in-memory database will be created until the connection is
+||| closed. If `path` is the empty string, a temporary on-disk database will be
+||| created, which will be deleted once the connection is closed.
 export
-sqliteOpen : String -> IO (Either SqlError DB)
+sqliteOpen : (path : String) -> IO (Either SqlError DB)
 sqliteOpen fn = withPtrAlloc $ \db_ptr => do
     res <- fromInt <$> primIO (prim__sqlite_open fn db_ptr)
     case res of
       SQLITE_OK => Right . D <$> dereference db_ptr
       r         => pure (Left $ ResultError r)
 
+||| Closes the given database connection returning an `SqlResult` describing
+||| if all went well.
 export
 sqliteClose : DB -> IO SqlResult
 sqliteClose d = fromInt <$> primIO (prim__sqlite_close d.db)
 
+||| Convenience alias for `ingore . sqliteClose`.
 export %inline
 sqliteClose' : DB -> IO ()
 sqliteClose' = ignore . sqliteClose
@@ -236,14 +263,20 @@ sqliteClose' = ignore . sqliteClose
 --          Working with Statements
 --------------------------------------------------------------------------------
 
+||| Deletes a prepared SQL statement.
+|||
+||| This can be called on a statement at any time, even if there is still
+||| more data available or the statement has not been evaluated at all.
 export
 sqliteFinalize : Stmt -> IO SqlResult
 sqliteFinalize s = fromInt <$> primIO (prim__sqlite3_finalize s.stmt)
 
+||| Convenience alias for `ignore . sqliteFinalize`.
 export %inline
 sqliteFinalize' : Stmt -> IO ()
 sqliteFinalize' = ignore . sqliteFinalize
 
+||| Prepares an SQL statement for execution with the given database connection.
 export
 sqlitePrepare : (d : DB) => String -> IO (Either SqlError Stmt)
 sqlitePrepare s = withPtrAlloc $ \stmt_ptr => do
@@ -252,6 +285,16 @@ sqlitePrepare s = withPtrAlloc $ \stmt_ptr => do
       SQLITE_OK => Right . S <$> dereference stmt_ptr
       r         => pure (Left $ ResultError r)
 
+||| Evaluates the given prepared SQL statement.
+|||
+||| Some of the possible results
+|||  * `SQLITE_DONE`   : Execution has finished and there is no more data
+|||  * `SQLITE_ROW`    : Another row of output is available
+|||  * `SQLITE_MISUSE` : Invalid use of statement (perhaps it was already finalized?)
+|||  * `SQLITE_BUSY`   : If the statement is a commit you can retry it
+|||
+||| More details about the possible results can be found at the
+||| [documentation of the SQLite C interface](https://www.sqlite.org/c3ref/step.html).
 export
 sqliteStep : Stmt -> IO SqlResult
 sqliteStep s = do
@@ -269,6 +312,10 @@ loadCol INT     = sqlite3ColumnInt32
 loadCol INTEGER = sqlite3ColumnInt64
 loadCol REAL    = sqlite3ColumnDouble
 
+||| Tries to read a single row of data from an SQL statement.
+|||
+||| Only invoke this utility after `sqliteStep` returned with result
+||| `SQLITE_ROW`.
 export
 loadRow : (s : Stmt) => {ts : Schema} -> IO (Either SqlError $ Row ts)
 loadRow = do
@@ -284,6 +331,7 @@ loadRow = do
         Right vs <- go ncols (col+1) t | Left err => pure (Left err)
         pure $ Right (v::vs)
 
+||| Tries to extract up to `max` lines of data from a prepared SQL statement.
 export
 loadRows : (s : Stmt) => {ts : _} -> (max : Nat) -> IO (Either SqlError $ Table ts)
 loadRows 0 = pure $ Right []

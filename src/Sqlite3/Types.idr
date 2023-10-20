@@ -11,6 +11,10 @@ import Derive.Prelude
 --          Status Info
 --------------------------------------------------------------------------------
 
+||| Possible result codes when interacting with the SQLite C interface.
+|||
+||| These result codes are described in greater detail in the
+||| [SQLite C interface documentation](https://www.sqlite.org/rescode.html).
 public export
 data SqlResult : Type where
   SQLITE_OK         : SqlResult -- Successful result
@@ -87,6 +91,8 @@ fromInt _   = Unknown
 --          Schema
 --------------------------------------------------------------------------------
 
+||| Enumeration listing the different types of data that can be stored in
+||| an SQLite table column.
 public export
 data SqlColType : Type where
   BLOB    : SqlColType
@@ -97,6 +103,7 @@ data SqlColType : Type where
 
 %runElab derive "SqlColType" [Show,Eq,Ord]
 
+||| Associates an `SqlColType` with the corresponding Idris type.
 public export
 0 IdrisColType : SqlColType -> Type
 IdrisColType BLOB    = Maybe ByteString
@@ -105,15 +112,20 @@ IdrisColType INT     = Int32
 IdrisColType INTEGER = Int64
 IdrisColType REAL    = Double
 
+||| A database or row schema consistes of the types of data stored in
+||| each column.
 public export
 0 Schema : Type
 Schema = List SqlColType
 
 namespace Schema
+  ||| A row of data is a heterogeneous list holding values of the types and
+  ||| in the order described in the schema.
   public export
   0 Row : Schema -> Type
   Row = All IdrisColType
 
+  ||| A table of data is just a list of rows.
   public export
   0 Table : Schema -> Type
   Table = List . Row
@@ -122,6 +134,8 @@ namespace Schema
 --          Error Type
 --------------------------------------------------------------------------------
 
+||| Error type that can occur when interacting with the unsafe world of
+||| SQLite.
 public export
 data SqlError : Type where
   ResultError    : SqlResult -> SqlError

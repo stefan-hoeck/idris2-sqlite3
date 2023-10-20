@@ -28,6 +28,16 @@ parameters {auto has : Has SqlError es}
     stmt <- injectIO $ sqlitePrepare str
     finally (liftIO $ sqliteFinalize' stmt) (f @{stmt})
 
+  ||| Prepare an SQL statement and use it to run the given effectful
+  ||| computation.
+  |||
+  ||| This works just like `withStmt` but it also bind the given arguments.
+  export
+  withBindStmt : DB => String -> List Arg -> (Stmt => App es a) -> App es a
+  withBindStmt str args f = do
+    stmt <- injectIO $ sqliteBind str args
+    finally (liftIO $ sqliteFinalize' stmt) (f @{stmt})
+
   ||| Runs an SQL statement, returning the response from the database.
   export
   step : (s : Stmt) => App es SqlResult
@@ -35,8 +45,13 @@ parameters {auto has : Has SqlError es}
 
   ||| Prepares, executes and finalizes the given SQL statement.
   export
+  commit_ : DB => String -> List Arg -> App es ()
+  commit_ str args = withBindStmt str args (ignore step)
+
+  ||| Prepares, executes and finalizes the given SQL statement.
+  export %inline
   commit : DB => String -> App es ()
-  commit str = withStmt str (ignore step)
+  commit str = commit_ str []
 
   ||| Prepares and executes the given SQL query and extracts up to
   ||| `n` rows of results.

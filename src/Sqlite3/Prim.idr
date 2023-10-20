@@ -125,6 +125,27 @@ prim__sqlite3_column_bytes : Ptr StmtPtr -> (iCol : Bits32) -> PrimIO Bits32
 %foreign (idris_sqlite "sqlite3_column_count")
 prim__sqlite3_column_count : Ptr StmtPtr -> PrimIO Bits32
 
+%foreign (idris_sqlite "bind_text")
+prim__sqlite3_bind_text : Ptr StmtPtr -> (ix : Bits32) -> String -> PrimIO Int
+
+%foreign (idris_sqlite "bind_buffer")
+prim__sqlite3_bind_blob : Ptr StmtPtr -> (ix : Bits32) -> Buffer ->  (size : Bits32) -> PrimIO Int
+
+%foreign (idris_sqlite "sqlite3_bind_double")
+prim__sqlite3_bind_double : Ptr StmtPtr -> (ix : Bits32) -> Double -> PrimIO Int
+
+%foreign (idris_sqlite "sqlite3_bind_int")
+prim__sqlite3_bind_int32 : Ptr StmtPtr -> (ix : Bits32) -> Int32 -> PrimIO Int
+
+%foreign (idris_sqlite "sqlite3_bind_int64")
+prim__sqlite3_bind_int64 : Ptr StmtPtr -> (ix : Bits32) -> Int64 -> PrimIO Int
+
+%foreign (idris_sqlite "sqlite3_bind_parameter_index")
+prim__sqlite3_bind_parameter_index : Ptr StmtPtr -> String -> PrimIO Bits32
+
+%foreign (idris_sqlite "sqlite3_bind_null")
+prim__sqlite3_bind_null : Ptr StmtPtr -> (ix : Bits32) -> PrimIO Int
+
 --------------------------------------------------------------------------------
 --          Pointers
 --------------------------------------------------------------------------------
@@ -284,6 +305,43 @@ sqlitePrepare s = withPtrAlloc $ \stmt_ptr => do
     case res of
       SQLITE_OK => Right . S <$> dereference stmt_ptr
       r         => pure (Left $ ResultError r)
+
+primRes : PrimIO Int -> IO (Either SqlError ())
+primRes f = do
+  SQLITE_OK <- fromInt <$> fromPrim f | c => pure (Left $ ResultError c)
+  pure (Right ())
+
+bindArg : Stmt -> Arg -> IO (Either SqlError ())
+bindArg s (A n t v) = do
+  ix <- fromPrim $ prim__sqlite3_bind_parameter_index s.stmt n
+  case t of
+    INT     => primRes $ prim__sqlite3_bind_int32 s.stmt ix v
+    INTEGER => primRes $ prim__sqlite3_bind_int64 s.stmt ix v
+    REAL    => primRes $ prim__sqlite3_bind_double s.stmt ix v
+    BLOB =>
+      case v of
+        Nothing => primRes $ prim__sqlite3_bind_null s.stmt ix
+        Just b  => do
+          buf <- toBuffer b
+          primRes $ prim__sqlite3_bind_blob s.stmt ix buf (cast b.size)
+    TEXT =>
+      case v of
+        Nothing  => primRes $ prim__sqlite3_bind_null s.stmt ix
+        Just str => primRes $ prim__sqlite3_bind_text s.stmt ix str
+
+bindArgs : Stmt -> List Arg -> IO (Either SqlError ())
+bindArgs stmt []        = pure (Right ())
+bindArgs stmt (x :: xs) = do
+  Right () <- bindArg stmt x | Left err => pure (Left err)
+  bindArgs stmt xs
+
+||| Prepares an SQL statement together with binding the given arguments.
+export
+sqliteBind : (d : DB) => String -> List Arg -> IO (Either SqlError Stmt)
+sqliteBind str xs = do
+  Right stmt <- sqlitePrepare str | Left err => pure (Left err)
+  Right ()   <- bindArgs stmt xs  | Left err => pure (Left err)
+  pure (Right stmt)
 
 ||| Evaluates the given prepared SQL statement.
 |||

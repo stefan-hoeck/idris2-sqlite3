@@ -146,6 +146,18 @@ data SqlError : Type where
 %runElab derive "SqlError" [Show,Eq]
 
 --------------------------------------------------------------------------------
+--          Arguments
+--------------------------------------------------------------------------------
+
+||| Argument to be bound in an SQL statement.
+public export
+record Arg where
+  constructor A
+  name  : String
+  type  : SqlColType
+  value : IdrisColType type
+
+--------------------------------------------------------------------------------
 --          Interface
 --------------------------------------------------------------------------------
 

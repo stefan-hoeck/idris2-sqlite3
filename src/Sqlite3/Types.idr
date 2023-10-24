@@ -97,7 +97,6 @@ public export
 data SqlColType : Type where
   BLOB    : SqlColType
   TEXT    : SqlColType
-  INT     : SqlColType
   INTEGER : SqlColType
   REAL    : SqlColType
 
@@ -108,7 +107,6 @@ public export
 0 IdrisColType : SqlColType -> Type
 IdrisColType BLOB    = Maybe ByteString
 IdrisColType TEXT    = Maybe String
-IdrisColType INT     = Int32
 IdrisColType INTEGER = Int64
 IdrisColType REAL    = Double
 

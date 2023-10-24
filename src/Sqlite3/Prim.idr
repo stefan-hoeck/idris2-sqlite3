@@ -315,7 +315,6 @@ bindArg : Stmt -> Arg -> IO (Either SqlError ())
 bindArg s (A n t v) = do
   ix <- fromPrim $ prim__sqlite3_bind_parameter_index s.stmt n
   case t of
-    INT     => primRes $ prim__sqlite3_bind_int32 s.stmt ix v
     INTEGER => primRes $ prim__sqlite3_bind_int64 s.stmt ix v
     REAL    => primRes $ prim__sqlite3_bind_double s.stmt ix v
     BLOB =>
@@ -366,7 +365,6 @@ sqliteStep s = do
 loadCol : Stmt => (t : SqlColType) -> Bits32 -> IO (IdrisColType t)
 loadCol BLOB    = sqlite3ColumnBlob
 loadCol TEXT    = sqlite3ColumnText
-loadCol INT     = sqlite3ColumnInt32
 loadCol INTEGER = sqlite3ColumnInt64
 loadCol REAL    = sqlite3ColumnDouble
 

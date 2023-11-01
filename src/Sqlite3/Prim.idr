@@ -412,8 +412,8 @@ loadRow = do
     go _     _   []      = pure (Right [])
     go 0     _   (p::ps) = pure (Left NoMoreData)
     go (S k) col (p::ps) = do
-      Right c  <- loadCell col | Left err => pure (Left err)
-      Right cs <- go k col ps  | Left err => pure (Left err)
+      Right c  <- loadCell col     | Left err => pure (Left err)
+      Right cs <- go k (col +1) ps | Left err => pure (Left err)
       pure (Right $ c :: cs)
 
 ||| Tries to extract up to `max` lines of data from a prepared SQL statement.

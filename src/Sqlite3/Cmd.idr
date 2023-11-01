@@ -1,6 +1,8 @@
 module Sqlite3.Cmd
 
+import Data.List.Quantifiers
 import Sqlite3.Expr
+import Sqlite3.Marshall
 import Sqlite3.Table
 import Sqlite3.Types
 
@@ -13,7 +15,7 @@ namespace Columns
   ||| This is used for inserting values into a table using the `INSERT`
   ||| command: Column names come in one list, while a corresponding
   ||| list of values (expressions) comes in a second list (see
-  ||| `Sqlite3.Cmd.Values.Values`).
+  ||| `Sqlite3.Cmd.Exprs.Exprs`).
   |||
   ||| Note: Typically, the `ts` index of a column list is derived
   |||       from a columns name and the proof of the name being in
@@ -35,19 +37,45 @@ namespace Columns
   (++) []     ws = ws
   (++) (h::t) ws = h :: (t ++ ws)
 
-namespace Values
+namespace Exprs
   ||| A list of expressions to be inserted, updated, or selected
   ||| in a table.
   public export
+  data Exprs : (t : Table) -> (ts : List SqliteType) -> Type where
+    Nil  : Exprs t []
+    (::) : Expr [t] x -> Exprs t ts -> Exprs t (x::ts)
+
+  ||| Concatenates two lists of expressions.
+  export
+  (++) : Exprs t xs -> Exprs t ys -> Exprs t (xs ++ ys)
+  (++) []     ws = ws
+  (++) (h::t) ws = h :: (t ++ ws)
+
+namespace Values
+  ||| A list of marshallable Idris values to be inserted or
+  ||| updated in a table.
+  public export
   data Values : (t : Table) -> (ts : List SqliteType) -> Type where
     Nil  : Values t []
-    (::) : Expr [t] x -> Values t ts -> Values t (x::ts)
+    (::) :
+         {0 a : Type}
+      -> (val : a)
+      -> {auto prf : AsCell a}
+      -> Values t ts
+      -> Values t (CellType a ::ts)
 
   ||| Concatenates two lists of expressions.
   export
   (++) : Values t xs -> Values t ys -> Values t (xs ++ ys)
   (++) []     ws = ws
   (++) (h::t) ws = h :: (t ++ ws)
+
+  ||| We can always convert a list of marshallable Idris values to
+  ||| a list of SQL expressions.
+  export
+  toExprs : Values t ts -> Exprs t ts
+  toExprs []        = []
+  toExprs (v :: vs) = val v :: toExprs vs
 
 ||| A single name-value pair in an `UPDATE` statement.
 public export
@@ -102,14 +130,14 @@ data Cmd : CmdType -> Type where
        {0 ts : List SqliteType}
     -> (t : Table)
     -> (cols : Columns t ts)
-    -> (vals : Values t ts)
+    -> (vals : Exprs t ts)
     -> Cmd TInsert
 
   REPLACE :
        {0 ts : List SqliteType}
     -> (t : Table)
     -> (cols : Columns t ts)
-    -> (vals : Values t ts)
+    -> (vals : Exprs t ts)
     -> Cmd TInsert
 
   UPDATE :
@@ -122,6 +150,14 @@ data Cmd : CmdType -> Type where
        (t      : Table)
     -> (where_ : Expr [t] BOOL)
     -> Cmd TDelete
+
+export
+insert :
+    (t : Table)
+  -> Columns t ts
+  -> Values t ts
+  -> Cmd TInsert
+insert t cs vs = INSERT t cs (toExprs vs)
 
 namespace Cmds
   ||| A list of different types of commands, with the
@@ -167,12 +203,35 @@ public export %inline
 dropTable : (t : Table) -> Cmd TDrop
 dropTable t = DROP_TABLE t False
 
+namespace QueryExprs
+  ||| A list of expressions to be collected in a query
+  public export
+  data QueryExprs : (t : Table) -> (ts : List Type) -> Type where
+    Nil  : QueryExprs t []
+    (::) :
+         {0 t        : Table}
+      -> {0 tpe      : Type}
+      -> {0 ts       : List Type}
+      -> {auto p     : AsCell tpe}
+      -> (expr       : Expr [t] (CellType tpe))
+      -> (cs         : QueryExprs t ts)
+      -> QueryExprs t (tpe :: ts)
+
 ||| Different types of `SELECT` commands.
 public export
-data Query : (ts : List SqliteType) -> Type where
+data Query : (ts : List Type) -> Type where
   SELECT_FROM :
-       {0 ts   : List SqliteType}
+       {0 ts   : List Type}
     -> (t      : Table)
-    -> (vs     : Values t ts)
+    -> (vs     : QueryExprs t ts)
     -> (where_ : Expr [t] BOOL)
     -> Query ts
+
+export %inline
+queryProofs : Query ts -> All AsCell ts
+queryProofs (SELECT_FROM _ vs _) = go vs
+  where
+    go : QueryExprs t xs -> All AsCell xs
+    go []        = []
+    go (_ :: cs) = %search :: go cs
+

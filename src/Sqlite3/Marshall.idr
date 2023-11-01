@@ -93,6 +93,12 @@ AsCell ByteString where
   fromCell = decodeJust "ByteString" Right
 
 public export
+AsCell Double where
+  cellType = REAL
+  toCell   = Just
+  fromCell = decodeJust "Double" Right
+
+public export
 AsCell Bool where
   cellType     = INTEGER
   toCell True  = Just 1

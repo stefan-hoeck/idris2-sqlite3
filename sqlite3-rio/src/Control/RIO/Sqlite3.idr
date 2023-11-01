@@ -120,7 +120,5 @@ parameters {auto has : Has SqlError es}
       runCommands (c::cs) = cmd c >> runCommands cs
 
   export %inline
-  query : {ts : _} -> DB => Query ts -> App es (All (Maybe . IdrisType) ts)
-  -- query q =
-  --   let (PS _ args, str) := runState init (encodeQuery q)
-  --    in withBindStmt str args (injectIO $ loadRows 10000000)
+  query : DB => Query ts -> Nat -> App es (List $ HList ts)
+  query q = selectRows @{%search} @{queryProofs q} (encodeQuery q)

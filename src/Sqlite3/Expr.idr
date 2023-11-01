@@ -4,6 +4,7 @@ import Data.Bits
 import Data.Buffer.Indexed
 import Data.ByteString
 
+import Sqlite3.Marshall
 import Sqlite3.Table
 import Sqlite3.Types
 
@@ -85,6 +86,14 @@ FromDouble (Expr s REAL) where
 -- export %inline
 -- FromString (Expr s TEXT) where
 --   fromString = Lit TEXT . Just
+
+||| Convert a value of a marshallable type to a literal expression.
+export
+val : AsCell a => a -> Expr s (CellType a)
+val x =
+  case toCell x of
+    Nothing => NULL
+    Just v  => Lit _ v
 
 --------------------------------------------------------------------------------
 -- Encode

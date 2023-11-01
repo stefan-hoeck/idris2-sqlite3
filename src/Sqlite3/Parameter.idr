@@ -36,18 +36,23 @@ export
 init : ParamST
 init = PS 0 []
 
+||| Utility alias for an SQL statement with parameters.
+public export
+0 ParamStmt : Type
+ParamStmt = State ParamST String
+
 --------------------------------------------------------------------------------
 -- Encode with parameters
 --------------------------------------------------------------------------------
 
-encOp : String -> Expr s t -> Expr s t -> State ParamST String
+encOp : String -> Expr s t -> Expr s t -> ParamStmt
 
-encPrefix : String -> Expr s t -> State ParamST String
+encPrefix : String -> Expr s t -> ParamStmt
 
 ||| Encodes an expression, generating a list of parameters with
 ||| unique names that will be bound when running the SQL statement.
 export
-encodeExprP : Expr s t -> State ParamST String
+encodeExprP : Expr s t -> ParamStmt
 encodeExprP (AddI x y)   = encOp "+" x y
 encodeExprP (MultI x y)  = encOp "*" x y
 encodeExprP (SubI x y)   = encOp "-" x y
@@ -152,13 +157,13 @@ insertCols : SnocList String -> Columns t ts -> String
 insertCols sc []      = commaSep id (sc <>> [])
 insertCols sc (c::cs) = insertCols (sc :< c) cs
 
-values : SnocList String -> Values t ts -> State ParamST String
+values : SnocList String -> Values t ts -> ParamStmt
 values sc []      = pure $ commaSep id (sc <>> [])
 values sc (c::cs) = do
   s <- encodeExprP c
   values (sc :< s) cs
 
-updateVals : SnocList String -> List (Val t) -> State ParamST String
+updateVals : SnocList String -> List (Val t) -> ParamStmt
 updateVals sc []        = pure $ commaSep id (sc <>> [])
 updateVals sc (x :: xs) = do
   v <- encodeExprP x.val
@@ -171,7 +176,7 @@ updateVals sc (x :: xs) = do
 |||
 ||| `State ParamST` is used to keep track of the defined parameters.
 export
-encodeCmd : Cmd t -> State ParamST String
+encodeCmd : Cmd t -> ParamStmt
 encodeCmd (CREATE_TABLE t cs ifNotExists) =
   let CS m ts := foldl encConstraint (CS empty []) cs
       cols    := encodeCols m t.cols
@@ -198,7 +203,7 @@ encodeCmd (DELETE t wh) = do
 ||| The query will be encoded as a string with parameters
 ||| inserted as placeholders for literal values where appropriate.
 export
-encodeQuery : Query ts -> State ParamST String
+encodeQuery : Query ts -> ParamStmt
 encodeQuery (SELECT_FROM t vs where_) = do
   vstr <- values [<] vs
   wh   <- encodeExprP where_

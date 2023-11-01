@@ -8,6 +8,7 @@ import Data.ByteString
 import Data.List.Quantifiers
 
 import Sqlite3.Expr
+import Sqlite3.Marshall
 import Sqlite3.Parameter
 import Sqlite3.Types
 
@@ -371,60 +372,65 @@ sqliteStep s = fromInt <$> primIO (prim__sqlite_step s.stmt)
 --          Loading Rows
 --------------------------------------------------------------------------------
 
-||| A `Cell` holds a single value in an SQLite table.
-|||
-||| It is either `Nothing` in case the value is `NULL`, or an `SqliteType`
-||| paired with a value of the corresponding `IdrisType`.
-public export
-0 Cell : Type
-Cell = Maybe (DPair SqliteType IdrisType)
+tryLoad :
+     {auto s : Stmt}
+  -> Bits8
+  -> (t : SqliteType)
+  -> Bits32
+  -> IO (Either SqlError $ Maybe (IdrisType t))
+tryLoad 1 INTEGER ix = Right . Just <$> sqlite3ColumnInt64 ix
+tryLoad 2 REAL    ix = Right . Just <$> sqlite3ColumnDouble ix
+tryLoad 3 TEXT    ix = Right . Just <$> sqlite3ColumnText ix
+tryLoad 4 BLOB    ix = Right . Just <$> sqlite3ColumnBlob ix
+tryLoad 5 _       ix = pure (Right Nothing)
+tryLoad 1 t       ix = pure $ Left (TypeMismatch t INTEGER)
+tryLoad 2 t       ix = pure $ Left (TypeMismatch t REAL)
+tryLoad 3 t       ix = pure $ Left (TypeMismatch t TEXT)
+tryLoad _ t       ix = pure $ Left (TypeMismatch t BLOB)
 
-export
-Show Cell where
-  show Nothing         = "NULL"
-  show (Just (t ** v)) = encodeLit t v
-
-||| A `Row` is a list of `Cell`s.
-public export
-0 Row : Type
-Row = List Cell
-
-loadCell : (s : Stmt) => Bits32 -> IO Cell
+loadCell : (s : Stmt) => AsCell a => Bits32 -> IO (Either SqlError a)
 loadCell ix = do
   tpe <- fromPrim $ prim__sqlite3_column_type s.stmt ix
-  case tpe of
-    1 => (\x => Just (INTEGER ** x)) <$> sqlite3ColumnInt64 ix
-    2 => (\x => Just (REAL ** x))    <$> sqlite3ColumnDouble ix
-    3 => (\x => Just (TEXT ** x))    <$> sqlite3ColumnText ix
-    4 => (\x => Just (BLOB ** x))    <$> sqlite3ColumnBlob ix
-    _ => pure Nothing
+  Right v <- tryLoad tpe (CellType a) ix | Left err => pure (Left err)
+  pure $ fromCell v
 
 ||| Tries to read a single row of data from an SQL statement.
 |||
 ||| Only invoke this utility after `sqliteStep` returned with result
 ||| `SQLITE_ROW`.
 export
-loadRow : (s : Stmt) => IO Row
+loadRow :
+     {auto s : Stmt}
+  -> {auto ps : All (AsCell . f) ts}
+  -> IO (Either SqlError $ All f ts)
 loadRow = do
   ncols <- sqlite3ColumnCount
-  go [<] (cast ncols) 0
+  go (cast ncols) 0 ps
+
   where
-    go : SnocList Cell -> Nat -> (col: Bits32) -> IO Row
-    go sc 0     _   = pure (sc <>> [])
-    go sc (S k) col = do
-      c <- loadCell col
-      go (sc :< c) k (col+1)
+    go : Nat -> Bits32 -> All (AsCell . f) ss -> IO (Either SqlError $ All f ss)
+    go _     _   []      = pure (Right [])
+    go 0     _   (p::ps) = pure (Left NoMoreData)
+    go (S k) col (p::ps) = do
+      Right c  <- loadCell col | Left err => pure (Left err)
+      Right cs <- go k col ps  | Left err => pure (Left err)
+      pure (Right $ c :: cs)
 
 ||| Tries to extract up to `max` lines of data from a prepared SQL statement.
 export
-loadRows : DB => (s : Stmt) => (max : Nat) -> IO (Either SqlError $ List Row)
+loadRows :
+     {auto db : DB}
+  -> {auto s  : Stmt}
+  -> {auto ps : All (AsCell . f) ts}
+  -> (max     : Nat)
+  -> IO (Either SqlError $ List (All f ts))
 loadRows = go [<]
   where
-    go : SnocList Row -> Nat -> IO (Either SqlError $ List Row)
+    go : SnocList (All f ts) -> Nat -> IO (Either SqlError $ List (All f ts))
     go sr 0     = pure (Right $ sr <>> [])
     go sr (S k) = do
       SQLITE_ROW <- sqliteStep s
         | SQLITE_DONE => pure (Right $ sr <>> [])
         | res         => sqlFailRes res
-      r  <- loadRow
+      Right r  <- loadRow {ts} | Left err => pure (Left err)
       go (sr :< r) k

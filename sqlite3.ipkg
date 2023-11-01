@@ -14,6 +14,7 @@ sourcedir = "src"
 modules = Sqlite3
         , Sqlite3.Cmd
         , Sqlite3.Expr
+        , Sqlite3.Marshall
         , Sqlite3.Parameter
         , Sqlite3.Prim
         , Sqlite3.Run

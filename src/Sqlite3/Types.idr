@@ -108,8 +108,6 @@ data SqliteType : Type where
 %runElab derive "SqliteType" [Show,Eq,Ord]
 
 ||| Associates an `SqliteType` with the corresponding Idris type.
-||| All types are nullable, therefore we always use `Maybe` on
-||| the Idris side.
 public export
 0 IdrisType : SqliteType -> Type
 IdrisType BLOB    = ByteString
@@ -126,8 +124,10 @@ IdrisType BOOL    = Bool
 ||| SQLite.
 public export
 data SqlError : Type where
-  ResultError    : SqlResult -> (msg : String) -> SqlError
-  DecodingError  : SqliteType -> String -> SqlError
-  NoMoreData     : SqlError
+  ResultError   : SqlResult -> (msg : String) -> SqlError
+  DecodingError : SqliteType -> String -> SqlError
+  TypeMismatch  : (expected, found : SqliteType) -> SqlError
+  NullPointer   : String -> SqlError
+  NoMoreData    : SqlError
 
 %runElab derive "SqlError" [Show,Eq]

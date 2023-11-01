@@ -65,7 +65,7 @@ data Constraint : Table -> Type where
   Unique        : List (TColumn t) -> Constraint t
   PrimaryKey    : List (TColumn t) -> Constraint t
   ForeignKey    : List (TColumn t) -> Constraint t
-  Check         : Expr [t] INTEGER -> Constraint t
+  Check         : Expr [t] BOOL -> Constraint t
   Default       :
        {0 t        : Table}
     -> (s          : String)
@@ -115,12 +115,12 @@ data Cmd : CmdType -> Type where
   UPDATE :
        (t      : Table)
     -> (set    : List (Val t))
-    -> (where_ : Expr [t] INTEGER)
+    -> (where_ : Expr [t] BOOL)
     -> Cmd TUpdate
 
   DELETE :
        (t      : Table)
-    -> (where_ : Expr [t] INTEGER)
+    -> (where_ : Expr [t] BOOL)
     -> Cmd TDelete
 
 namespace Cmds
@@ -174,5 +174,5 @@ data Query : (ts : List SqliteType) -> Type where
        {0 ts   : List SqliteType}
     -> (t      : Table)
     -> (vs     : Values t ts)
-    -> (where_ : Expr [t] INTEGER)
+    -> (where_ : Expr [t] BOOL)
     -> Query ts

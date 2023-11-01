@@ -1,7 +1,9 @@
 module Control.RIO.Sqlite3
 
+import Control.Monad.State
 import public Control.RIO.App
 import public Sqlite3
+import public Data.List.Quantifiers
 
 %default total
 
@@ -45,8 +47,10 @@ parameters {auto has : Has SqlError es}
   |||
   ||| This works just like `withStmt` but it also bind the given arguments.
   export
-  withBoundStmt : DB => String -> List Parameter -> (Stmt => App es a) -> App es a
-  withBoundStmt str ps f = withStmt str (bindParams ps >> f)
+  withBoundStmt : DB => ParamStmt -> (Stmt => App es a) -> App es a
+  withBoundStmt st f =
+    let (ps, str) := runState init st
+     in withStmt str (bindParams ps.args >> f)
 
   ||| Runs an SQL statement, returning the response from the database.
   export
@@ -58,27 +62,65 @@ parameters {auto has : Has SqlError es}
   ||| The statement may hold a list of parameters, which will be
   ||| bound prior to executing the statement.
   export
-  commit : DB => String -> List Parameter -> App es ()
-  commit str ps = withBoundStmt str ps (ignore step)
+  commit : DB => ParamStmt -> App es ()
+  commit st = withBoundStmt st (ignore step)
 
   ||| Prepares and executes the given SQL query and extracts up to
   ||| `n` rows of results.
   export
-  selectRows : DB => String -> List Parameter -> (n : Nat) -> App es (List Row)
-  selectRows str ps n = withBoundStmt str ps (injectIO $ loadRows n)
+  selectRows :
+       {auto db : DB}
+    -> {auto ps : All (AsCell . f) ts}
+    -> ParamStmt
+    -> (n : Nat)
+    -> App es (List $ All f ts)
+  selectRows st n = withBoundStmt st (injectIO $ loadRows n)
 
   ||| Prepares and executes the given SQL query and extracts the
   ||| first result.
   export
-  selectRow : DB => String -> List Parameter -> App es Row
-  selectRow str ps = do
-    [v] <- selectRows str ps 1 | _ => throw NoMoreData
+  selectRow : DB => All (AsCell . f) ts => ParamStmt -> App es (All f ts)
+  selectRow st = do
+    [v] <- selectRows st 1 | _ => throw NoMoreData
     pure v
 
   ||| Prepares and executes the given SQL query and extracts the
   ||| first result (if any).
   export
-  findRow : DB => String -> List Parameter -> App es (Maybe Row)
-  findRow str ps = do
-    [v] <- selectRows str ps 1 | _ => pure Nothing
+  findRow : DB => All (AsCell . f) ts => ParamStmt -> App es (Maybe $ All f ts)
+  findRow st = do
+    [v] <- selectRows st 1 | _ => pure Nothing
     pure $ Just v
+
+--------------------------------------------------------------------------------
+-- Runnings Commands
+--------------------------------------------------------------------------------
+
+  ||| Executes the given SQL command.
+  export %inline
+  cmd : DB => Cmd t -> App es ()
+  cmd = commit . encodeCmd
+
+  rollback : DB => HSum es -> App es a
+  rollback x = ignore (withStmt "ROLLBACK TRANSACTION" step) >> fail x
+
+  ||| Runs several commands in a single transaction.
+  |||
+  ||| If any of the commands fails, the whole transaction is rolled back.
+  export %inline
+  cmds : DB => Cmds -> App es ()
+  cmds cs = do
+    ignore $ withStmt "BEGIN TRANSACTION" step
+    catch rollback (runCommands cs)
+    ignore $ withStmt "COMMIT TRANSACTION" step
+
+    where
+      runCommands : Cmds -> App es ()
+      runCommands []      = pure ()
+      runCommands (c::cs) = cmd c >> runCommands cs
+
+  export %inline
+  query : {ts : _} -> DB => Query ts -> App es (All (Maybe . IdrisType) ts)
+  -- query q =
+  --   let (PS _ args, str) := runState init (encodeQuery q)
+  --    in withBindStmt str args (injectIO $ loadRows 10000000)

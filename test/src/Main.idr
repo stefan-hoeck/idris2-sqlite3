@@ -14,49 +14,59 @@ import Control.RIO.Sqlite3
 Errs = [SqlError]
 
 handlers : All (Handler ()) Errs
-handlers =
-  [ printLn
-  ]
+handlers = [ printLn ]
 
 --------------------------------------------------------------------------------
 --          App
 --------------------------------------------------------------------------------
 
-insert : DB => Int64 -> String -> String -> Double -> App Errs ()
-insert ix nm cas w =
-  commit_
-    "INSERT INTO Molecules VALUES(:v,:w,:x,:y);"
-    [ A ":v" INTEGER ix
-    , A ":w" TEXT (Just nm)
-    , A ":x" TEXT (Just cas)
-    , A ":y" REAL w
+Molecules : Table
+Molecules =
+  T "molecules"
+    [ C "id"        INTEGER
+    , C "name"      TEXT
+    , C "casnr"     TEXT
+    , C "molweight" REAL
     ]
 
-insertBlob : DB => Int64 -> ByteString -> App Errs ()
-insertBlob ix bs =
-  commit_
-    "INSERT INTO Files VALUES(:v,:w);"
-    [ A ":v" INTEGER ix
-    , A ":w" BLOB (Just bs)
+Files : Table
+Files =
+  T "files"
+    [ C "id"        INTEGER
+    , C "content"   BLOB
     ]
+
+insertMol : String -> Maybe String -> Maybe Double -> Cmd TInsert
+insertMol n c m = insert Molecules ["name", "casnr", "molweight"] [n,c,m]
+
+insertFile : ByteString -> Cmd TInsert
+insertFile ix = insert Files ["content"] [ix]
+
+mol : Query [Bits32, String, Maybe String, Maybe Double]
+mol = SELECT_FROM Molecules ["id", "name", "casnr", "molweight"] ("id" > 1)
+
+fil : Query [ByteString]
+fil = SELECT_FROM Files ["content"] ("id" == 1)
 
 app : App Errs ()
 app = withDB ":memory:" $ do
-  commit "CREATE TABLE Molecules(Id INTEGER, Name TEXT, CasNr Text, MolWeight REAL);"
-  insert 1 "Ethanol" "64-17-5" 46.069
-  insert 2 "Strychnine" "57-24-9" 334.419
-  insert 3 "Atropine" "51-55-8" 289.375
-  vs <- select {ts = [TEXT,REAL]} "SELECT Name,MolWeight FROM Molecules" 10
-  traverse_ printLn vs
-  v <- select1 {ts = [TEXT,REAL]} "SELECT Name,MolWeight FROM Molecules"
-  printLn v
-  v <- selectMaybe {ts = [TEXT,REAL]} "SELECT Name,MolWeight FROM Molecules"
-  printLn v
-
-  commit "CREATE TABLE Files(Id INTEGER, Content BLOB);"
-  insertBlob 1 (pack [1,2,3])
-  v <- selectMaybe {ts = [INTEGER,BLOB]} "SELECT Id,Content FROM Files"
-  printLn v
+  cmds
+    [ if_not_exists $
+        createTable Molecules
+          [PrimaryKey ["id"], AutoIncrement "id", Unique ["casnr"]]
+    , if_not_exists $
+        createTable Files
+          [PrimaryKey ["id"], AutoIncrement "id"]
+    , insertMol "Ethanol"    (Just "64-17-5") (Just 46.069)
+    , insertMol "Strychnine" (Just "57-24-9") (Just 334.419)
+    , insertMol "Atropine"   (Just "51-55-8") (Just 289.375)
+    , insertMol "Sub1"       Nothing          Nothing
+    , insertFile (pack [0x01, 0x02, 0xab, 0xcf, 0xff, 0x1a])
+    ]
+  ms <- query mol 1000
+  traverse_ printLn ms
+  fs <- query fil 1
+  traverse_ (\[bs] => putStrLn $ encodeBytes bs) fs
 
 main : IO ()
 main = runApp handlers app

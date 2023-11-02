@@ -1,7 +1,9 @@
 module Control.RIO.Sqlite3
 
+import Control.Monad.State
 import public Control.RIO.App
 import public Sqlite3
+import public Data.List.Quantifiers
 
 %default total
 
@@ -28,15 +30,27 @@ parameters {auto has : Has SqlError es}
     stmt <- injectIO $ sqlitePrepare str
     finally (liftIO $ sqliteFinalize' stmt) (f @{stmt})
 
-  ||| Prepare an SQL statement and use it to run the given effectful
-  ||| computation.
+  ||| Prepare an SQL statement and use it to run the given effectful computation.
+  |||
+  ||| This comes with the guarantees that the statement is properly
+  ||| finalized at the end.
   |||
   ||| This works just like `withStmt` but it also bind the given arguments.
   export
-  withBindStmt : DB => String -> List Arg -> (Stmt => App es a) -> App es a
-  withBindStmt str args f = do
-    stmt <- injectIO $ sqliteBind str args
-    finally (liftIO $ sqliteFinalize' stmt) (f @{stmt})
+  bindParams : DB => Stmt => List Parameter -> App es ()
+  bindParams ps = injectIO (sqliteBind ps)
+
+  ||| Prepare an SQL statement and use it to run the given effectful computation.
+  |||
+  ||| This comes with the guarantees that the statement is properly
+  ||| finalized at the end.
+  |||
+  ||| This works just like `withStmt` but it also bind the given arguments.
+  export
+  withBoundStmt : DB => ParamStmt -> (Stmt => App es a) -> App es a
+  withBoundStmt st f =
+    let (ps, str) := runState init st
+     in withStmt str (bindParams ps.args >> f)
 
   ||| Runs an SQL statement, returning the response from the database.
   export
@@ -44,33 +58,67 @@ parameters {auto has : Has SqlError es}
   step @{s} = liftIO $ sqliteStep s
 
   ||| Prepares, executes and finalizes the given SQL statement.
+  |||
+  ||| The statement may hold a list of parameters, which will be
+  ||| bound prior to executing the statement.
   export
-  commit_ : DB => String -> List Arg -> App es ()
-  commit_ str args = withBindStmt str args (ignore step)
-
-  ||| Prepares, executes and finalizes the given SQL statement.
-  export %inline
-  commit : DB => String -> App es ()
-  commit str = commit_ str []
+  commit : DB => ParamStmt -> App es ()
+  commit st = withBoundStmt st (ignore step)
 
   ||| Prepares and executes the given SQL query and extracts up to
   ||| `n` rows of results.
   export
-  select : DB => {ts : _} -> String -> (n : Nat) -> App es (Table ts)
-  select str n = withStmt str (injectIO $ loadRows n)
+  selectRows :
+       {auto db : DB}
+    -> {auto ps : All (AsCell . f) ts}
+    -> ParamStmt
+    -> (n : Nat)
+    -> App es (List $ All f ts)
+  selectRows st n = withBoundStmt st (injectIO $ loadRows n)
 
   ||| Prepares and executes the given SQL query and extracts the
   ||| first result.
   export
-  select1 : DB => {ts : _} -> String -> App es (Row ts)
-  select1 str = do
-    [v] <- select str 1 | _ => throw NoMoreData
+  selectRow : DB => All (AsCell . f) ts => ParamStmt -> App es (All f ts)
+  selectRow st = do
+    [v] <- selectRows st 1 | _ => throw NoMoreData
     pure v
 
   ||| Prepares and executes the given SQL query and extracts the
   ||| first result (if any).
   export
-  selectMaybe : DB => {ts : _} -> String -> App es (Maybe $ Row ts)
-  selectMaybe str = do
-    [v] <- select str 1 | _ => pure Nothing
+  findRow : DB => All (AsCell . f) ts => ParamStmt -> App es (Maybe $ All f ts)
+  findRow st = do
+    [v] <- selectRows st 1 | _ => pure Nothing
     pure $ Just v
+
+--------------------------------------------------------------------------------
+-- Runnings Commands
+--------------------------------------------------------------------------------
+
+  ||| Executes the given SQL command.
+  export %inline
+  cmd : DB => Cmd t -> App es ()
+  cmd = commit . encodeCmd
+
+  rollback : DB => HSum es -> App es a
+  rollback x = ignore (withStmt "ROLLBACK TRANSACTION" step) >> fail x
+
+  ||| Runs several commands in a single transaction.
+  |||
+  ||| If any of the commands fails, the whole transaction is rolled back.
+  export %inline
+  cmds : DB => Cmds -> App es ()
+  cmds cs = do
+    ignore $ withStmt "BEGIN TRANSACTION" step
+    catch rollback (runCommands cs)
+    ignore $ withStmt "COMMIT TRANSACTION" step
+
+    where
+      runCommands : Cmds -> App es ()
+      runCommands []      = pure ()
+      runCommands (c::cs) = cmd c >> runCommands cs
+
+  export %inline
+  query : DB => Query ts -> Nat -> App es (List $ HList ts)
+  query q = selectRows @{%search} @{queryProofs q} (encodeQuery q)

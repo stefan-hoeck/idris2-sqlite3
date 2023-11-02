@@ -57,6 +57,10 @@ data Expr : Schema -> SqliteType -> Type where
 
   (++)   : Expr s TEXT -> Expr s TEXT -> Expr s TEXT
 
+  CURRENT_TIME      : Expr s TEXT
+  CURRENT_DATE      : Expr s TEXT
+  CURRENT_TIMESTAMP : Expr s TEXT
+
 export %inline
 Num (Expr s INTEGER) where
   fromInteger = Lit INTEGER . fromInteger
@@ -192,6 +196,7 @@ encPrefix : String -> Expr s t -> String
 |||       binding the statement.
 export
 encodeExpr : Expr s t -> String
+encodeExpr (Lit t v)    = encodeLit t v
 encodeExpr (AddI x y)   = encOp "+" x y
 encodeExpr (MultI x y)  = encOp "*" x y
 encodeExpr (SubI x y)   = encOp "-" x y
@@ -220,10 +225,12 @@ encodeExpr (NegD x)     = encPrefix "-" x
 encodeExpr (Raw s)      = s
 encodeExpr (Col t c)    = "\{t}.\{c}"
 encodeExpr (C c)        = c
-encodeExpr (Lit t v)    = encodeLit t v
 encodeExpr NULL         = "NULL"
 encodeExpr TRUE         = "1"
 encodeExpr FALSE        = "0"
+encodeExpr CURRENT_TIME      = "CURRENT_TIME"
+encodeExpr CURRENT_DATE      = "CURRENT_DATE"
+encodeExpr CURRENT_TIMESTAMP = "CURRENT_TIMESTAMP"
 
 encOp s x y =
   let sx := encodeExpr x

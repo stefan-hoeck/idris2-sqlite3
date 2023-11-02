@@ -54,6 +54,11 @@ encPrefix : String -> Expr s t -> ParamStmt
 ||| unique names that will be bound when running the SQL statement.
 export
 encodeExprP : Expr s t -> ParamStmt
+encodeExprP (Lit t v)    =
+  state $ \(PS x as) =>
+    let s := ":\{show x}"
+     in (PS (S x) (P s t v :: as), s)
+
 encodeExprP (AddI x y)   = encOp "+" x y
 encodeExprP (MultI x y)  = encOp "*" x y
 encodeExprP (SubI x y)   = encOp "-" x y
@@ -85,10 +90,10 @@ encodeExprP TRUE         = pure "1"
 encodeExprP FALSE        = pure "0"
 encodeExprP (Col t c)    = pure "\{t}.\{c}"
 encodeExprP (C c)        = pure c
-encodeExprP (Lit t v)    =
-  state $ \(PS x as) =>
-    let s := ":\{show x}"
-     in (PS (S x) (P s t v :: as), s)
+
+encodeExprP CURRENT_TIME      = pure "CURRENT_TIME"
+encodeExprP CURRENT_DATE      = pure "CURRENT_DATE"
+encodeExprP CURRENT_TIMESTAMP = pure "CURRENT_TIMESTAMP"
 
 encOp s x y = do
   sx <- encodeExprP x

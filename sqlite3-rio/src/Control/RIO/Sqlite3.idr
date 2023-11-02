@@ -28,15 +28,25 @@ parameters {auto has : Has SqlError es}
     stmt <- injectIO $ sqlitePrepare str
     finally (liftIO $ sqliteFinalize' stmt) (f @{stmt})
 
-  ||| Prepare an SQL statement and use it to run the given effectful
-  ||| computation.
+  ||| Prepare an SQL statement and use it to run the given effectful computation.
+  |||
+  ||| This comes with the guarantees that the statement is properly
+  ||| finalized at the end.
   |||
   ||| This works just like `withStmt` but it also bind the given arguments.
   export
-  withBindStmt : DB => String -> List Arg -> (Stmt => App es a) -> App es a
-  withBindStmt str args f = do
-    stmt <- injectIO $ sqliteBind str args
-    finally (liftIO $ sqliteFinalize' stmt) (f @{stmt})
+  bindParams : DB => Stmt => List Parameter -> App es ()
+  bindParams ps = injectIO (sqliteBind ps)
+
+  ||| Prepare an SQL statement and use it to run the given effectful computation.
+  |||
+  ||| This comes with the guarantees that the statement is properly
+  ||| finalized at the end.
+  |||
+  ||| This works just like `withStmt` but it also bind the given arguments.
+  export
+  withBoundStmt : DB => String -> List Parameter -> (Stmt => App es a) -> App es a
+  withBoundStmt str ps f = withStmt str (bindParams ps >> f)
 
   ||| Runs an SQL statement, returning the response from the database.
   export
@@ -44,33 +54,31 @@ parameters {auto has : Has SqlError es}
   step @{s} = liftIO $ sqliteStep s
 
   ||| Prepares, executes and finalizes the given SQL statement.
+  |||
+  ||| The statement may hold a list of parameters, which will be
+  ||| bound prior to executing the statement.
   export
-  commit_ : DB => String -> List Arg -> App es ()
-  commit_ str args = withBindStmt str args (ignore step)
-
-  ||| Prepares, executes and finalizes the given SQL statement.
-  export %inline
-  commit : DB => String -> App es ()
-  commit str = commit_ str []
+  commit : DB => String -> List Parameter -> App es ()
+  commit str ps = withBoundStmt str ps (ignore step)
 
   ||| Prepares and executes the given SQL query and extracts up to
   ||| `n` rows of results.
   export
-  select : DB => {ts : _} -> String -> (n : Nat) -> App es (Table ts)
-  select str n = withStmt str (injectIO $ loadRows n)
+  selectRows : DB => String -> List Parameter -> (n : Nat) -> App es (List Row)
+  selectRows str ps n = withBoundStmt str ps (injectIO $ loadRows n)
 
   ||| Prepares and executes the given SQL query and extracts the
   ||| first result.
   export
-  select1 : DB => {ts : _} -> String -> App es (Row ts)
-  select1 str = do
-    [v] <- select str 1 | _ => throw NoMoreData
+  selectRow : DB => String -> List Parameter -> App es Row
+  selectRow str ps = do
+    [v] <- selectRows str ps 1 | _ => throw NoMoreData
     pure v
 
   ||| Prepares and executes the given SQL query and extracts the
   ||| first result (if any).
   export
-  selectMaybe : DB => {ts : _} -> String -> App es (Maybe $ Row ts)
-  selectMaybe str = do
-    [v] <- select str 1 | _ => pure Nothing
+  findRow : DB => String -> List Parameter -> App es (Maybe Row)
+  findRow str ps = do
+    [v] <- selectRows str ps 1 | _ => pure Nothing
     pure $ Just v

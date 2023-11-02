@@ -1,7 +1,6 @@
 module Sqlite3.Types
 
 import Data.Buffer.Indexed
-import Data.List.Quantifiers
 import Derive.Prelude
 
 %default total
@@ -93,40 +92,31 @@ fromInt _   = Unknown
 
 ||| Enumeration listing the different types of data that can be stored in
 ||| an SQLite table column.
+|||
+||| Note: Strictly speaking, `BOOL` is not an officially supported SQL type
+|||       but just an integer internally. However, being able to distinguish
+|||       between `BOOL` and `INTEGER` allows us to get clearer types
+|||       in the expressions we use in filters and checks.
 public export
-data SqlColType : Type where
-  BLOB    : SqlColType
-  TEXT    : SqlColType
-  INTEGER : SqlColType
-  REAL    : SqlColType
+data SqliteType : Type where
+  BLOB    : SqliteType
+  TEXT    : SqliteType
+  INTEGER : SqliteType
+  REAL    : SqliteType
+  BOOL    : SqliteType
 
-%runElab derive "SqlColType" [Show,Eq,Ord]
+%runElab derive "SqliteType" [Show,Eq,Ord]
 
-||| Associates an `SqlColType` with the corresponding Idris type.
+||| Associates an `SqliteType` with the corresponding Idris type.
+||| All types are nullable, therefore we always use `Maybe` on
+||| the Idris side.
 public export
-0 IdrisColType : SqlColType -> Type
-IdrisColType BLOB    = Maybe ByteString
-IdrisColType TEXT    = Maybe String
-IdrisColType INTEGER = Int64
-IdrisColType REAL    = Double
-
-||| A database or row schema consistes of the types of data stored in
-||| each column.
-public export
-0 Schema : Type
-Schema = List SqlColType
-
-namespace Schema
-  ||| A row of data is a heterogeneous list holding values of the types and
-  ||| in the order described in the schema.
-  public export
-  0 Row : Schema -> Type
-  Row = All IdrisColType
-
-  ||| A table of data is just a list of rows.
-  public export
-  0 Table : Schema -> Type
-  Table = List . Row
+0 IdrisType : SqliteType -> Type
+IdrisType BLOB    = ByteString
+IdrisType TEXT    = String
+IdrisType INTEGER = Int64
+IdrisType REAL    = Double
+IdrisType BOOL    = Bool
 
 --------------------------------------------------------------------------------
 --          Error Type
@@ -136,33 +126,8 @@ namespace Schema
 ||| SQLite.
 public export
 data SqlError : Type where
-  ResultError    : SqlResult -> SqlError
-  ColOutOfBounds : (cols, col : Bits32) -> SqlError
-  DecodingError  : SqlColType -> String -> SqlError
+  ResultError    : SqlResult -> (msg : String) -> SqlError
+  DecodingError  : SqliteType -> String -> SqlError
   NoMoreData     : SqlError
 
 %runElab derive "SqlError" [Show,Eq]
-
---------------------------------------------------------------------------------
---          Arguments
---------------------------------------------------------------------------------
-
-||| Argument to be bound in an SQL statement.
-public export
-record Arg where
-  constructor A
-  name  : String
-  type  : SqlColType
-  value : IdrisColType type
-
---------------------------------------------------------------------------------
---          Interface
---------------------------------------------------------------------------------
-
-public export
-interface ToSQL (0 a : Type) (0 t : SqlColType) | a where
-  toSQL : a -> IdrisColType t
-
-public export
-interface FromSQL (0 a : Type) (0 t : SqlColType) | a where
-  fromSQL : IdrisColType t -> Either SqlError a

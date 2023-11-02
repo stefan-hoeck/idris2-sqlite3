@@ -4,7 +4,11 @@ module Sqlite3.Prim
 
 import Data.Buffer
 import Data.Buffer.Indexed
+import Data.ByteString
 import Data.List.Quantifiers
+
+import Sqlite3.Expr
+import Sqlite3.Parameter
 import Sqlite3.Types
 
 %default total
@@ -113,6 +117,9 @@ prim__sqlite3_column_blob : Ptr StmtPtr -> (iCol : Bits32) -> PrimIO AnyPtr
 %foreign (idris_sqlite "sqlite3_column_double")
 prim__sqlite3_column_double : Ptr StmtPtr -> (iCol : Bits32) -> PrimIO Double
 
+%foreign (idris_sqlite "sqlite3_column_type")
+prim__sqlite3_column_type : Ptr StmtPtr -> (iCol : Bits32) -> PrimIO Bits8
+
 %foreign (idris_sqlite "sqlite3_column_int")
 prim__sqlite3_column_int32 : Ptr StmtPtr -> (iCol : Bits32) -> PrimIO Int32
 
@@ -204,6 +211,16 @@ export %inline
 sqlite3ErrMsg : (d : DB) => IO String
 sqlite3ErrMsg = primIO $ prim__sqlite3_errmsg d.db
 
+export %inline
+sqlFailRes : DB => SqlResult -> IO (Either SqlError a)
+sqlFailRes r = do
+  msg <- sqlite3ErrMsg
+  pure (Left $ ResultError r msg)
+
+export %inline
+sqlFail : DB => Int -> IO (Either SqlError a)
+sqlFail = sqlFailRes . fromInt
+
 --------------------------------------------------------------------------------
 --          Accessing Columns
 --------------------------------------------------------------------------------
@@ -214,26 +231,29 @@ sqlite3ColumnCount : (s : Stmt) => IO Bits32
 sqlite3ColumnCount = primIO $ prim__sqlite3_column_count s.stmt
 
 ||| Try to read the text stored in the current column.
-export
-sqlite3ColumnText : (s : Stmt) => (iCol : Bits32) -> IO (Maybe String)
+|||
+||| Note: This assumes that callers have already verified that the
+|||       stored value is not a null pointer, for instance, by first
+|||       invoking prim__sqlite3_column_type
+export %inline
+sqlite3ColumnText : (s : Stmt) => (iCol : Bits32) -> IO String
 sqlite3ColumnText iCol = do
   ptr <- primIO $ prim__sqlite3_column_text s.stmt iCol
-  case prim__nullPtr ptr of
-    0 => Just <$> ptrToStr ptr
-    _ => pure Nothing
+  ptrToStr ptr
 
 ||| Try to read the bytestring stored in the current column.
+|||
+||| Note: This assumes that callers have already verified that the
+|||       stored value is not a null pointer, for instance, by first
+|||       invoking prim__sqlite3_column_type
 export
-sqlite3ColumnBlob : (s : Stmt) => (iCol : Bits32) -> IO (Maybe ByteString)
+sqlite3ColumnBlob : (s : Stmt) => (iCol : Bits32) -> IO ByteString
 sqlite3ColumnBlob iCol = do
   ptr <- primIO $ prim__sqlite3_column_blob s.stmt iCol
-  case prim__nullAnyPtr ptr of
-    0 => do
-      n        <- primIO $ prim__sqlite3_column_bytes s.stmt iCol
-      Just buf <- newBuffer (cast n) | Nothing => pure Nothing
-      primIO $ prim__copy_buffer n buf ptr
-      pure . Just $ unsafeByteString (cast n) buf
-    _ => pure Nothing
+  n        <- primIO $ prim__sqlite3_column_bytes s.stmt iCol
+  Just buf <- newBuffer (cast n) | Nothing => pure empty
+  primIO $ prim__copy_buffer n buf ptr
+  pure $ unsafeByteString (cast n) buf
 
 ||| Read the floating point number stored in the current column.
 export %inline
@@ -264,14 +284,13 @@ sqlite3ColumnInt64 = primIO . prim__sqlite3_column_int64 s.stmt
 export
 sqliteOpen : (path : String) -> IO (Either SqlError DB)
 sqliteOpen fn = withPtrAlloc $ \db_ptr => do
-    res <- fromInt <$> primIO (prim__sqlite_open fn db_ptr)
-    case res of
-      SQLITE_OK => Right . D <$> dereference db_ptr
-      r         => pure (Left $ ResultError r)
+    0 <- primIO (prim__sqlite_open fn db_ptr)
+      | r => pure (Left $ ResultError (fromInt r) "unable to open connect to \{fn}")
+    Right . D <$> dereference db_ptr
 
 ||| Closes the given database connection returning an `SqlResult` describing
 ||| if all went well.
-export
+export %inline
 sqliteClose : DB -> IO SqlResult
 sqliteClose d = fromInt <$> primIO (prim__sqlite_close d.db)
 
@@ -288,7 +307,7 @@ sqliteClose' = ignore . sqliteClose
 |||
 ||| This can be called on a statement at any time, even if there is still
 ||| more data available or the statement has not been evaluated at all.
-export
+export %inline
 sqliteFinalize : Stmt -> IO SqlResult
 sqliteFinalize s = fromInt <$> primIO (prim__sqlite3_finalize s.stmt)
 
@@ -301,46 +320,38 @@ sqliteFinalize' = ignore . sqliteFinalize
 export
 sqlitePrepare : (d : DB) => String -> IO (Either SqlError Stmt)
 sqlitePrepare s = withPtrAlloc $ \stmt_ptr => do
-    res <- fromInt <$> primIO (prim__sqlite_prepare d.db s (-1) stmt_ptr nullPtr)
-    case res of
-      SQLITE_OK => Right . S <$> dereference stmt_ptr
-      r         => pure (Left $ ResultError r)
+    0 <- primIO (prim__sqlite_prepare d.db s (-1) stmt_ptr nullPtr)
+      | r => sqlFail r
+    Right . S <$> dereference stmt_ptr
 
-primRes : PrimIO Int -> IO (Either SqlError ())
-primRes f = do
-  SQLITE_OK <- fromInt <$> fromPrim f | c => pure (Left $ ResultError c)
-  pure (Right ())
+%inline boolToInt : Bool -> Int64
+boolToInt True  = 1
+boolToInt False = 0
 
-bindArg : Stmt -> Arg -> IO (Either SqlError ())
-bindArg s (A n t v) = do
+bindParam : DB => Stmt -> Parameter -> IO Int
+bindParam s (P n t v) = do
   ix <- fromPrim $ prim__sqlite3_bind_parameter_index s.stmt n
   case t of
-    INTEGER => primRes $ prim__sqlite3_bind_int64 s.stmt ix v
-    REAL    => primRes $ prim__sqlite3_bind_double s.stmt ix v
-    BLOB =>
-      case v of
-        Nothing => primRes $ prim__sqlite3_bind_null s.stmt ix
-        Just b  => do
-          buf <- toBuffer b
-          primRes $ prim__sqlite3_bind_blob s.stmt ix buf (cast b.size)
-    TEXT =>
-      case v of
-        Nothing  => primRes $ prim__sqlite3_bind_null s.stmt ix
-        Just str => primRes $ prim__sqlite3_bind_text s.stmt ix str
+    INTEGER => fromPrim $ prim__sqlite3_bind_int64 s.stmt ix v
+    REAL    => fromPrim $ prim__sqlite3_bind_double s.stmt ix v
+    TEXT    => fromPrim $ prim__sqlite3_bind_text s.stmt ix v
+    BOOL    => fromPrim $ prim__sqlite3_bind_int64 s.stmt ix (boolToInt v)
+    BLOB    => do
+      buf <- toBuffer v
+      fromPrim $ prim__sqlite3_bind_blob s.stmt ix buf (cast v.size)
 
-bindArgs : Stmt -> List Arg -> IO (Either SqlError ())
-bindArgs stmt []        = pure (Right ())
-bindArgs stmt (x :: xs) = do
-  Right () <- bindArg stmt x | Left err => pure (Left err)
-  bindArgs stmt xs
+bindParams : DB => Stmt -> List Parameter -> IO Int
+bindParams stmt []        = pure 0
+bindParams stmt (x :: xs) = do
+  0 <- bindParam stmt x | x => pure x
+  bindParams stmt xs
 
-||| Prepares an SQL statement together with binding the given arguments.
+||| Binds the given parameters to an SQLite statement.
 export
-sqliteBind : (d : DB) => String -> List Arg -> IO (Either SqlError Stmt)
-sqliteBind str xs = do
-  Right stmt <- sqlitePrepare str | Left err => pure (Left err)
-  Right ()   <- bindArgs stmt xs  | Left err => pure (Left err)
-  pure (Right stmt)
+sqliteBind : (d : DB) => (s : Stmt) => List Parameter -> IO (Either SqlError ())
+sqliteBind xs = do
+  0 <- bindParams s xs | r => sqlFail r
+  pure (Right ())
 
 ||| Evaluates the given prepared SQL statement.
 |||
@@ -352,49 +363,68 @@ sqliteBind str xs = do
 |||
 ||| More details about the possible results can be found at the
 ||| [documentation of the SQLite C interface](https://www.sqlite.org/c3ref/step.html).
-export
+export %inline
 sqliteStep : Stmt -> IO SqlResult
-sqliteStep s = do
-    res <- fromInt <$> primIO (prim__sqlite_step s.stmt)
-    pure res
+sqliteStep s = fromInt <$> primIO (prim__sqlite_step s.stmt)
 
 --------------------------------------------------------------------------------
 --          Loading Rows
 --------------------------------------------------------------------------------
 
-loadCol : Stmt => (t : SqlColType) -> Bits32 -> IO (IdrisColType t)
-loadCol BLOB    = sqlite3ColumnBlob
-loadCol TEXT    = sqlite3ColumnText
-loadCol INTEGER = sqlite3ColumnInt64
-loadCol REAL    = sqlite3ColumnDouble
+||| A `Cell` holds a single value in an SQLite table.
+|||
+||| It is either `Nothing` in case the value is `NULL`, or an `SqliteType`
+||| paired with a value of the corresponding `IdrisType`.
+public export
+0 Cell : Type
+Cell = Maybe (DPair SqliteType IdrisType)
+
+export
+Show Cell where
+  show Nothing         = "NULL"
+  show (Just (t ** v)) = encodeLit t v
+
+||| A `Row` is a list of `Cell`s.
+public export
+0 Row : Type
+Row = List Cell
+
+loadCell : (s : Stmt) => Bits32 -> IO Cell
+loadCell ix = do
+  tpe <- fromPrim $ prim__sqlite3_column_type s.stmt ix
+  case tpe of
+    1 => (\x => Just (INTEGER ** x)) <$> sqlite3ColumnInt64 ix
+    2 => (\x => Just (REAL ** x))    <$> sqlite3ColumnDouble ix
+    3 => (\x => Just (TEXT ** x))    <$> sqlite3ColumnText ix
+    4 => (\x => Just (BLOB ** x))    <$> sqlite3ColumnBlob ix
+    _ => pure Nothing
 
 ||| Tries to read a single row of data from an SQL statement.
 |||
 ||| Only invoke this utility after `sqliteStep` returned with result
 ||| `SQLITE_ROW`.
 export
-loadRow : (s : Stmt) => {ts : Schema} -> IO (Either SqlError $ Row ts)
+loadRow : (s : Stmt) => IO Row
 loadRow = do
   ncols <- sqlite3ColumnCount
-  go ncols 0 ts
+  go [<] (cast ncols) 0
   where
-    go : (ncols, col: Bits32) -> (ss : Schema) -> IO (Either SqlError $ Row ss)
-    go ncols col []     = pure $ Right []
-    go ncols col (h::t) = case col < ncols of
-      False => pure $ Left (ColOutOfBounds ncols col)
-      True  => do
-        v        <- loadCol h col
-        Right vs <- go ncols (col+1) t | Left err => pure (Left err)
-        pure $ Right (v::vs)
+    go : SnocList Cell -> Nat -> (col: Bits32) -> IO Row
+    go sc 0     _   = pure (sc <>> [])
+    go sc (S k) col = do
+      c <- loadCell col
+      go (sc :< c) k (col+1)
 
 ||| Tries to extract up to `max` lines of data from a prepared SQL statement.
 export
-loadRows : (s : Stmt) => {ts : _} -> (max : Nat) -> IO (Either SqlError $ Table ts)
-loadRows 0 = pure $ Right []
-loadRows (S k) = do
-  SQLITE_ROW <- sqliteStep s
-    | SQLITE_DONE => pure (Right [])
-    | res         => pure (Left $ ResultError res)
-  Right r  <- loadRow    | Left err => pure (Left err)
-  Right rs <- loadRows k | Left err => pure (Left err)
-  pure $ Right (r::rs)
+loadRows : DB => (s : Stmt) => (max : Nat) -> IO (Either SqlError $ List Row)
+loadRows = go [<]
+  where
+    go : SnocList Row -> Nat -> IO (Either SqlError $ List Row)
+    go sr 0     = pure (Right $ sr <>> [])
+    go sr (S k) = do
+      SQLITE_ROW <- sqliteStep s
+        | SQLITE_DONE => pure (Right $ sr <>> [])
+        | res         => sqlFailRes res
+      r  <- loadRow
+      go (sr :< r) k

@@ -83,9 +83,12 @@ export %inline
 FromDouble (Expr s REAL) where
   fromDouble = Lit REAL
 
--- export %inline
--- FromString (Expr s TEXT) where
---   fromString = Lit TEXT . Just
+export %inline
+fromString :
+     (col      : String)
+  -> {auto 0 p : TableHasCol t col}
+  -> Expr [t] (ListColType t.cols p)
+fromString = C
 
 ||| Convert a value of a marshallable type to a literal expression.
 export
@@ -94,6 +97,22 @@ val x =
   case toCell x of
     Nothing => NULL
     Just v  => Lit _ v
+
+export %inline
+text : String -> Expr s TEXT
+text = val
+
+export %inline
+int : Int64 -> Expr s INTEGER
+int = val
+
+export %inline
+blob : ByteString -> Expr s BLOB
+blob = val
+
+export %inline
+real : Double -> Expr s REAL
+real = val
 
 --------------------------------------------------------------------------------
 -- Encode
@@ -120,12 +139,25 @@ hexChar _  = 'f'
 %inline quote : Char
 quote = '\''
 
+||| Encodes a `ByteString` as an SQL literal.
+|||
+||| Every byte is encodec with two hexadecimal digits, and the
+||| whole string is wrapped in single quotes prefixed with an "X".
+|||
+||| For instance, `encodeBytes (fromList [0xa1, 0x77])` yields the
+||| string "X'a177'".
+export
 encodeBytes : ByteString -> String
 encodeBytes = pack . (\x => 'X'::quote::x) . foldr acc [quote]
   where
     %inline acc : Bits8 -> List Char -> List Char
     acc b cs = hexChar (b `shiftR` 4) :: hexChar (b .&. 0xf) :: cs
 
+||| Encodes a `String` as an SQL literal.
+|||
+||| The whole string is wrapped in single quotes. Single quotes withing
+||| the string are escaped by doubling them.
+export
 encodeText : String -> String
 encodeText = go [<quote] . unpack
   where

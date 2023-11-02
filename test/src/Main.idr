@@ -43,8 +43,10 @@ insertFile : ByteString -> Cmd TInsert
 insertFile ix = insert Files ["content"] [ix]
 
 mol : Query [Bits32, String, Maybe String, Maybe Double]
-mol =
-  SELECT_FROM Molecules [C "id", C "name", C "casnr", C "molweight"] (C "id" > 1)
+mol = SELECT_FROM Molecules ["id", "name", "casnr", "molweight"] ("id" > 1)
+
+fil : Query [ByteString]
+fil = SELECT_FROM Files ["content"] ("id" == 1)
 
 app : App Errs ()
 app = withDB ":memory:" $ do
@@ -63,6 +65,8 @@ app = withDB ":memory:" $ do
     ]
   ms <- query mol 1000
   traverse_ printLn ms
+  fs <- query fil 1
+  traverse_ (\[bs] => putStrLn $ encodeBytes bs) fs
 
 main : IO ()
 main = runApp handlers app

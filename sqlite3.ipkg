@@ -17,7 +17,6 @@ modules = Sqlite3
         , Sqlite3.Marshall
         , Sqlite3.Parameter
         , Sqlite3.Prim
-        , Sqlite3.Run
         , Sqlite3.Table
         , Sqlite3.Types
 

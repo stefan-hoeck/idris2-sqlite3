@@ -73,6 +73,11 @@ Neg (Expr s INTEGER) where
   (-)    = SubI
 
 export %inline
+Integral (Expr s INTEGER) where
+  div = DivI
+  mod = Mod
+
+export %inline
 Num (Expr s REAL) where
   fromInteger = Lit REAL . fromInteger
   (+) = AddD
@@ -82,6 +87,10 @@ export %inline
 Neg (Expr s REAL) where
   negate = NegD
   (-)    = SubD
+
+export %inline
+Fractional (Expr s REAL) where
+  (/) = DivD
 
 export %inline
 FromDouble (Expr s REAL) where

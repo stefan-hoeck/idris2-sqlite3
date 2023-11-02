@@ -50,6 +50,8 @@ encOp : String -> Expr s t -> Expr s t -> ParamStmt
 
 encPrefix : String -> Expr s t -> ParamStmt
 
+encExprs : SnocList String -> List (Expr s t) -> ParamStmt
+
 ||| Encodes an expression, generating a list of parameters with
 ||| unique names that will be bound when running the SQL statement.
 export
@@ -74,6 +76,8 @@ encodeExprP (x <= y)     = encOp "<=" x y
 encodeExprP (x >= y)     = encOp ">=" x y
 encodeExprP (x == y)     = encOp "==" x y
 encodeExprP (x /= y)     = encOp "!=" x y
+encodeExprP (IS x y)     = encOp "IS" x y
+encodeExprP (IS_NOT x y) = encOp "IS NOT" x y
 encodeExprP (x && y)     = encOp "AND" x y
 encodeExprP (x || y)     = encOp "OR" x y
 encodeExprP (x ++ y)     = encOp "||" x y
@@ -94,6 +98,20 @@ encodeExprP (C c)        = pure c
 encodeExprP CURRENT_TIME      = pure "CURRENT_TIME"
 encodeExprP CURRENT_DATE      = pure "CURRENT_DATE"
 encodeExprP CURRENT_TIMESTAMP = pure "CURRENT_TIMESTAMP"
+encodeExprP (LIKE x y)        = encOp "LIKE" x y
+encodeExprP (NOT_LIKE x y)    = encOp "NOT_LIKE" x y
+encodeExprP (GLOB x y)        = encOp "GLOB" x y
+encodeExprP (NOT_GLOB x y)    = encOp "NOT_GLOB" x y
+
+encodeExprP (IN x xs) = do
+  s  <- encodeExprP x
+  ss <- encExprs [<] xs
+  pure "(\{s}) IN (\{ss})"
+
+encodeExprP (NOT_IN x xs) = do
+  s  <- encodeExprP x
+  ss <- encExprs [<] xs
+  pure "(\{s}) NOT IN (\{ss})"
 
 encOp s x y = do
   sx <- encodeExprP x
@@ -103,6 +121,11 @@ encOp s x y = do
 encPrefix s x = do
   sx <- encodeExprP x
   pure $ "\{s}(\{sx})"
+
+encExprs sc []      = pure . commaSep id $ sc <>> []
+encExprs sc (x::xs) = do
+  v <- encodeExprP x
+  encExprs (sc :< v) xs
 
 --------------------------------------------------------------------------------
 -- Encoding Commands
@@ -121,9 +144,6 @@ addCol (CS cs ts) n v =
 
 addTbl : Constraints -> String -> Constraints
 addTbl (CS cs ss) s = CS cs (s::ss)
-
-commaSep : (a -> String) -> List a -> String
-commaSep f = concat . intersperse ", " . map f
 
 names : List (TColumn t) -> String
 names = commaSep name

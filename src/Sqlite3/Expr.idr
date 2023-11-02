@@ -3,6 +3,7 @@ module Sqlite3.Expr
 import Data.Bits
 import Data.Buffer.Indexed
 import Data.ByteString
+import Data.String
 
 import Sqlite3.Marshall
 import Sqlite3.Table
@@ -34,6 +35,8 @@ data Expr : Schema -> SqliteType -> Type where
   (<=)   : Expr s t -> Expr s t -> Expr s BOOL
   (==)   : Expr s t -> Expr s t -> Expr s BOOL
   (/=)   : Expr s t -> Expr s t -> Expr s BOOL
+  IS     : Expr s t -> Expr s t -> Expr s BOOL
+  IS_NOT : Expr s t -> Expr s t -> Expr s BOOL
   (&&)   : Expr s BOOL -> Expr s BOOL -> Expr s BOOL
   (||)   : Expr s BOOL -> Expr s BOOL -> Expr s BOOL
   NOT    : Expr s BOOL -> Expr s BOOL
@@ -60,6 +63,12 @@ data Expr : Schema -> SqliteType -> Type where
   CURRENT_TIME      : Expr s TEXT
   CURRENT_DATE      : Expr s TEXT
   CURRENT_TIMESTAMP : Expr s TEXT
+  LIKE              : Expr s TEXT -> Expr s TEXT -> Expr s BOOL
+  NOT_LIKE          : Expr s TEXT -> Expr s TEXT -> Expr s BOOL
+  GLOB              : Expr s TEXT -> Expr s TEXT -> Expr s BOOL
+  NOT_GLOB          : Expr s TEXT -> Expr s TEXT -> Expr s BOOL
+  IN                : Expr s t -> List (Expr s t) -> Expr s BOOL
+  NOT_IN            : Expr s t -> List (Expr s t) -> Expr s BOOL
 
 export %inline
 Num (Expr s INTEGER) where
@@ -131,6 +140,10 @@ real = val
 -- Encode
 --------------------------------------------------------------------------------
 
+export
+commaSep : (a -> String) -> List a -> String
+commaSep f = concat . intersperse ", " . map f
+
 hexChar : Bits8 -> Char
 hexChar 0 = '0'
 hexChar 1 = '1'
@@ -196,6 +209,8 @@ encOp : String -> Expr s t -> Expr s t -> String
 
 encPrefix : String -> Expr s t -> String
 
+encExprs : SnocList String -> List (Expr s t) -> String
+
 ||| Encodes an expression as a string.
 |||
 ||| Literals will be correctly escaped and converted.
@@ -220,6 +235,8 @@ encodeExpr (x > y)      = encOp ">" x y
 encodeExpr (x <= y)     = encOp "<=" x y
 encodeExpr (x >= y)     = encOp ">=" x y
 encodeExpr (x == y)     = encOp "==" x y
+encodeExpr (IS x y)     = encOp "IS" x y
+encodeExpr (IS_NOT x y) = encOp "IS NOT" x y
 encodeExpr (x /= y)     = encOp "!=" x y
 encodeExpr (x && y)     = encOp "AND" x y
 encodeExpr (x || y)     = encOp "OR" x y
@@ -240,6 +257,12 @@ encodeExpr FALSE        = "0"
 encodeExpr CURRENT_TIME      = "CURRENT_TIME"
 encodeExpr CURRENT_DATE      = "CURRENT_DATE"
 encodeExpr CURRENT_TIMESTAMP = "CURRENT_TIMESTAMP"
+encodeExpr (LIKE x y)        = encOp "LIKE" x y
+encodeExpr (NOT_LIKE x y)    = encOp "NOT_LIKE" x y
+encodeExpr (GLOB x y)        = encOp "GLOB" x y
+encodeExpr (NOT_GLOB x y)    = encOp "NOT_GLOB" x y
+encodeExpr (IN x xs)         = "\{encodeExpr x} IN (\{encExprs [<] xs})"
+encodeExpr (NOT_IN x xs)     = "\{encodeExpr x} NOT IN (\{encExprs [<] xs})"
 
 encOp s x y =
   let sx := encodeExpr x
@@ -247,3 +270,6 @@ encOp s x y =
    in "(\{sx} \{s} \{sy})"
 
 encPrefix s x = "\{s}(\{encodeExpr x})"
+
+encExprs sc []      = commaSep id (sc <>> [])
+encExprs sc (x::xs) = encExprs (sc :< encodeExpr x) xs

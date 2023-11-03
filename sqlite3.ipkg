@@ -11,7 +11,11 @@ depends = base >= 0.6.0
 
 sourcedir = "src"
 
-modules = Sqlite3
+modules = Derive.Sqlite3
+        , Derive.Sqlite3.AsCell
+        , Derive.Sqlite3.AsRow
+
+        , Sqlite3
         , Sqlite3.Cmd
         , Sqlite3.Expr
         , Sqlite3.Marshall

@@ -426,10 +426,9 @@ loadRow = do
 ||| Tries to extract up to `max` lines of data from a prepared SQL statement.
 export
 loadRows :
-     {ts      : _}
-  -> {auto db : DB}
+     {auto db : DB}
   -> {auto s  : Stmt}
-  -> {auto ps : AsRow a ts}
+  -> {auto ps : AsRow a}
   -> (max     : Nat)
   -> IO (Either SqlError $ List a)
 loadRows = go [<]
@@ -440,7 +439,7 @@ loadRows = go [<]
       SQLITE_ROW <- sqliteStep s
         | SQLITE_DONE => pure (Right $ sr <>> [])
         | res         => sqlFailRes res
-      Right r  <- loadRow {ts} | Left err => pure (Left err)
+      Right r  <- loadRow | Left err => pure (Left err)
       case fromRow {a} r of
         Right v  => go (sr :< v) k
         Left err => pure (Left err)

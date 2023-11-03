@@ -203,35 +203,12 @@ public export %inline
 dropTable : (t : Table) -> Cmd TDrop
 dropTable t = DROP_TABLE t False
 
-namespace QueryExprs
-  ||| A list of expressions to be collected in a query
-  public export
-  data QueryExprs : (t : Table) -> (ts : List Type) -> Type where
-    Nil  : QueryExprs t []
-    (::) :
-         {0 t        : Table}
-      -> {0 tpe      : Type}
-      -> {0 ts       : List Type}
-      -> {auto p     : AsCell tpe}
-      -> (expr       : Expr [t] (CellType tpe))
-      -> (cs         : QueryExprs t ts)
-      -> QueryExprs t (tpe :: ts)
-
 ||| Different types of `SELECT` commands.
 public export
-data Query : (ts : List Type) -> Type where
+data Query : (ts : List SqliteType) -> Type where
   SELECT_FROM :
-       {0 ts   : List Type}
+       {0 ts   : List SqliteType}
     -> (t      : Table)
-    -> (vs     : QueryExprs t ts)
+    -> (xs     : Exprs t ts)
     -> (where_ : Expr [t] BOOL)
     -> Query ts
-
-export %inline
-queryProofs : Query ts -> All AsCell ts
-queryProofs (SELECT_FROM _ vs _) = go vs
-  where
-    go : QueryExprs t xs -> All AsCell xs
-    go []        = []
-    go (_ :: cs) = %search :: go cs
-

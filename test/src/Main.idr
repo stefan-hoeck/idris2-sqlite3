@@ -1,10 +1,13 @@
 module Main
 
+import Control.RIO.Sqlite3
 import Data.Buffer.Indexed
 import Data.ByteString
-import Control.RIO.Sqlite3
+import Data.List.Quantifiers
+import Derive.Prelude
 
 %default total
+%language ElabReflection
 
 --------------------------------------------------------------------------------
 --          Errors
@@ -15,6 +18,34 @@ Errs = [SqlError]
 
 handlers : All (Handler ()) Errs
 handlers = [ printLn ]
+
+--------------------------------------------------------------------------------
+--          Records
+--------------------------------------------------------------------------------
+
+record Molecule where
+  constructor M
+  id        : Bits32
+  name      : String
+  casNr     : Maybe String
+  molWeight : Maybe Double
+
+%runElab derive "Molecule" [Show, Eq]
+
+AsRow Molecule [INTEGER,TEXT,TEXT,REAL] where
+  toRow (M i n c m) = [toCell i, toCell n, toCell c, toCell m]
+  fromRow [i,n,c,m] = [| M (fromCell i) (fromCell n) (fromCell c) (fromCell m) |]
+
+record File where
+  constructor F
+  id        : Bits32
+  content   : ByteString
+
+%runElab derive "File" [Show, Eq]
+
+AsRow File [INTEGER,BLOB] where
+  toRow (F i c) = [toCell i, toCell c]
+  fromRow [i,c] = [| F (fromCell i) (fromCell c) |]
 
 --------------------------------------------------------------------------------
 --          App
@@ -42,11 +73,11 @@ insertMol n c m = insert Molecules ["name", "casnr", "molweight"] [n,c,m]
 insertFile : ByteString -> Cmd TInsert
 insertFile ix = insert Files ["content"] [ix]
 
-mol : Query [Bits32, String, Maybe String, Maybe Double]
+mol : Query [INTEGER, TEXT, TEXT, REAL]
 mol = SELECT_FROM Molecules ["id", "name", "casnr", "molweight"] ("id" > 1)
 
-fil : Query [ByteString]
-fil = SELECT_FROM Files ["content"] ("id" == 1)
+fil : Query [INTEGER,BLOB]
+fil = SELECT_FROM Files ["id","content"] ("id" == 1)
 
 app : App Errs ()
 app = withDB ":memory:" $ do
@@ -63,10 +94,10 @@ app = withDB ":memory:" $ do
     , insertMol "Sub1"       Nothing          Nothing
     , insertFile (pack [0x01, 0x02, 0xab, 0xcf, 0xff, 0x1a])
     ]
-  ms <- query mol 1000
+  ms <- query {a = Molecule} mol 1000
   traverse_ printLn ms
-  fs <- query fil 1
-  traverse_ (\[bs] => putStrLn $ encodeBytes bs) fs
+  fs <- query {a = File} fil 1
+  traverse_ (putStrLn . encodeBytes . content) fs
 
 main : IO ()
 main = runApp handlers app

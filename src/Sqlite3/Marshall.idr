@@ -7,6 +7,16 @@ import Sqlite3.Types
 %default total
 
 public export
+0 LAll : (0 f : k -> Type) -> List k -> Type
+LAll = Data.List.Quantifiers.All.All
+
+--------------------------------------------------------------------------------
+-- AsCell
+--------------------------------------------------------------------------------
+
+||| Inteface for converting an Idris value from and to a single cell in
+||| a table row.
+public export
 interface AsCell a where
   cellType : SqliteType
   toCell   : a -> Maybe (IdrisType cellType)
@@ -104,3 +114,41 @@ AsCell Bool where
   toCell True  = Just 1
   toCell False = Just 0
   fromCell     = decodeJust "Bool" (\case 0 => Right False; _ => Right True)
+
+--------------------------------------------------------------------------------
+-- AsRow
+--------------------------------------------------------------------------------
+
+||| Inteface for converting an Idris value from and to a row in a
+||| table.
+public export
+interface AsRow (0 a : Type) (0 ts : List SqliteType) | a where
+  toRow   : a -> LAll (Maybe . IdrisType) ts
+  fromRow : LAll (Maybe . IdrisType) ts -> Either SqlError a
+
+public export
+CellTypes : LAll (AsCell . f) ts -> List SqliteType
+CellTypes []        = []
+CellTypes (p :: ps) = cellType @{p} :: CellTypes ps
+
+toRowImpl :
+     (ps : LAll (AsCell . f) ts)
+  -> LAll f ts
+  -> LAll (Maybe . IdrisType) (CellTypes ps)
+toRowImpl []      []      = []
+toRowImpl (p::ps) (v::vs) = toCell v :: toRowImpl ps vs
+
+fromRowImpl :
+     (ps : LAll (AsCell . f) ts)
+  -> LAll (Maybe . IdrisType) (CellTypes ps)
+  -> Either SqlError (All f ts)
+fromRowImpl []      []      = Right []
+fromRowImpl (p::ps) (v::vs) =
+  let Right x  := fromCell v        | Left err => Left err
+      Right xs := fromRowImpl ps vs | Left err => Left err
+   in Right (x::xs)
+
+export
+(ps : LAll (AsCell . f) ts) => AsRow (LAll f ts) (CellTypes ps) where
+  toRow   = toRowImpl ps
+  fromRow = fromRowImpl ps

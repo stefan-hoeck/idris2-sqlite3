@@ -388,11 +388,14 @@ tryLoad 2 t       ix = pure $ Left (TypeMismatch t REAL)
 tryLoad 3 t       ix = pure $ Left (TypeMismatch t TEXT)
 tryLoad _ t       ix = pure $ Left (TypeMismatch t BLOB)
 
-loadCell : (s : Stmt) => AsCell a => Bits32 -> IO (Either SqlError a)
+loadCell :
+     {t : _}
+  -> {auto s : Stmt}
+  -> Bits32
+  -> IO (Either SqlError $ Maybe (IdrisType t))
 loadCell ix = do
-  tpe <- fromPrim $ prim__sqlite3_column_type s.stmt ix
-  Right v <- tryLoad tpe (CellType a) ix | Left err => pure (Left err)
-  pure $ fromCell v
+  tpe     <- fromPrim $ prim__sqlite3_column_type s.stmt ix
+  tryLoad tpe t ix
 
 ||| Tries to read a single row of data from an SQL statement.
 |||
@@ -400,37 +403,44 @@ loadCell ix = do
 ||| `SQLITE_ROW`.
 export
 loadRow :
-     {auto s : Stmt}
-  -> {auto ps : All (AsCell . f) ts}
-  -> IO (Either SqlError $ All f ts)
+     {ts     : List SqliteType}
+  -> {auto s : Stmt}
+  -> IO (Either SqlError $ All (Maybe . IdrisType) ts)
 loadRow = do
   ncols <- sqlite3ColumnCount
-  go (cast ncols) 0 ps
+  go (cast ncols) 0 ts
 
   where
-    go : Nat -> Bits32 -> All (AsCell . f) ss -> IO (Either SqlError $ All f ss)
+    go :
+         Nat
+      -> Bits32
+      -> (ss : List SqliteType)
+      -> IO (Either SqlError $ All (Maybe . IdrisType) ss)
     go _     _   []      = pure (Right [])
-    go 0     _   (p::ps) = pure (Left NoMoreData)
-    go (S k) col (p::ps) = do
+    go 0     _   (t::ss) = pure (Left NoMoreData)
+    go (S k) col (t::ss) = do
       Right c  <- loadCell col     | Left err => pure (Left err)
-      Right cs <- go k (col +1) ps | Left err => pure (Left err)
+      Right cs <- go k (col +1) ss | Left err => pure (Left err)
       pure (Right $ c :: cs)
 
 ||| Tries to extract up to `max` lines of data from a prepared SQL statement.
 export
 loadRows :
-     {auto db : DB}
+     {ts      : _}
+  -> {auto db : DB}
   -> {auto s  : Stmt}
-  -> {auto ps : All (AsCell . f) ts}
+  -> {auto ps : AsRow a ts}
   -> (max     : Nat)
-  -> IO (Either SqlError $ List (All f ts))
+  -> IO (Either SqlError $ List a)
 loadRows = go [<]
   where
-    go : SnocList (All f ts) -> Nat -> IO (Either SqlError $ List (All f ts))
+    go : SnocList a -> Nat -> IO (Either SqlError $ List a)
     go sr 0     = pure (Right $ sr <>> [])
     go sr (S k) = do
       SQLITE_ROW <- sqliteStep s
         | SQLITE_DONE => pure (Right $ sr <>> [])
         | res         => sqlFailRes res
       Right r  <- loadRow {ts} | Left err => pure (Left err)
-      go (sr :< r) k
+      case fromRow {a} r of
+        Right v  => go (sr :< v) k
+        Left err => pure (Left err)

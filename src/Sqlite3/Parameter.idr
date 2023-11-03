@@ -189,12 +189,6 @@ exprs sc (c::cs) = do
   s <- encodeExprP c
   exprs (sc :< s) cs
 
-qexprs : SnocList String -> QueryExprs t ts -> ParamStmt
-qexprs sc []      = pure $ commaSep id (sc <>> [])
-qexprs sc (c::cs) = do
-  s <- encodeExprP c
-  qexprs (sc :< s) cs
-
 updateVals : SnocList String -> List (Val t) -> ParamStmt
 updateVals sc []        = pure $ commaSep id (sc <>> [])
 updateVals sc (x :: xs) = do
@@ -237,6 +231,6 @@ encodeCmd (DELETE t wh) = do
 export
 encodeQuery : Query ts -> ParamStmt
 encodeQuery (SELECT_FROM t vs where_) = do
-  vstr <- qexprs [<] vs
+  vstr <- exprs [<] vs
   wh   <- encodeExprP where_
   pure "SELECT \{vstr} FROM \{t.name} WHERE \{wh}"

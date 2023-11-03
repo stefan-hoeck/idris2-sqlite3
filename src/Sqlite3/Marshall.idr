@@ -18,6 +18,7 @@ LAll = Data.List.Quantifiers.All.All
 ||| a table row.
 public export
 interface AsCell a where
+  constructor MkAsCell
   cellType : SqliteType
   toCell   : a -> Maybe (IdrisType cellType)
   fromCell : Maybe (IdrisType cellType) -> Either SqlError a
@@ -122,9 +123,15 @@ AsCell Bool where
 ||| Inteface for converting an Idris value from and to a row in a
 ||| table.
 public export
-interface AsRow (0 a : Type) (0 ts : List SqliteType) | a where
-  toRow   : a -> LAll (Maybe . IdrisType) ts
-  fromRow : LAll (Maybe . IdrisType) ts -> Either SqlError a
+interface AsRow a where
+  constructor MkAsRow
+  rowTypes : List SqliteType
+  toRow    : a -> LAll (Maybe . IdrisType) rowTypes
+  fromRow  : LAll (Maybe . IdrisType) rowTypes -> Either SqlError a
+
+public export %inline
+RowTypes : (0 a : Type) -> AsRow a => List SqliteType
+RowTypes a = rowTypes {a}
 
 public export
 CellTypes : LAll (AsCell . f) ts -> List SqliteType
@@ -149,6 +156,7 @@ fromRowImpl (p::ps) (v::vs) =
    in Right (x::xs)
 
 export
-(ps : LAll (AsCell . f) ts) => AsRow (LAll f ts) (CellTypes ps) where
-  toRow   = toRowImpl ps
-  fromRow = fromRowImpl ps
+{0 f : k -> Type} -> (ps : LAll (AsCell . f) ts) => AsRow (LAll f ts) where
+  rowTypes = CellTypes ps
+  toRow    = toRowImpl ps
+  fromRow  = fromRowImpl ps

@@ -68,19 +68,13 @@ parameters {auto has : Has SqlError es}
   ||| Prepares and executes the given SQL query and extracts up to
   ||| `n` rows of results.
   export
-  selectRows :
-       {ts : _}
-    -> {auto db : DB}
-    -> {auto ar : AsRow a ts}
-    -> ParamStmt
-    -> (n : Nat)
-    -> App es (List a)
+  selectRows : DB => AsRow a => ParamStmt -> (n : Nat) -> App es (List a)
   selectRows st n = withBoundStmt st (injectIO $ loadRows n)
 
   ||| Prepares and executes the given SQL query and extracts the
   ||| first result.
   export
-  selectRow : {ts : _} -> DB => AsRow a ts => ParamStmt -> App es a
+  selectRow : DB => AsRow a => ParamStmt -> App es a
   selectRow st = do
     [v] <- selectRows st 1 | _ => throw NoMoreData
     pure v
@@ -88,7 +82,7 @@ parameters {auto has : Has SqlError es}
   ||| Prepares and executes the given SQL query and extracts the
   ||| first result (if any).
   export
-  findRow : {ts :_} -> DB => AsRow a ts => ParamStmt -> App es (Maybe a)
+  findRow : DB => AsRow a => ParamStmt -> App es (Maybe a)
   findRow st = do
     [v] <- selectRows st 1 | _ => pure Nothing
     pure $ Just v
@@ -121,5 +115,11 @@ parameters {auto has : Has SqlError es}
       runCommands (c::cs) = cmd c >> runCommands cs
 
   export %inline
-  query : {ts : _} -> DB => Query ts -> AsRow a ts => Nat -> App es (List a)
+  query :
+       {auto db : DB}
+    -> Query ts
+    -> {auto db : AsRow a}
+    -> {auto 0 prf : ts === RowTypes a}
+    -> Nat
+    -> App es (List a)
   query q = selectRows (encodeQuery q)

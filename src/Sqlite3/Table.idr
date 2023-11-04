@@ -1,5 +1,6 @@
 module Sqlite3.Table
 
+import public Data.Maybe
 import Sqlite3.Types
 
 %default total
@@ -23,25 +24,41 @@ record Table where
   name : String
   cols : List Column
 
-||| Inductive proof that a list of columns has a column
-||| with the given string as its name.
+||| Tries and looks up a column type by name
+||| in a list of columns.
+|||
+||| We use this often in proofs, therefore this comes with
+||| an upper-case name.
 public export
-data ListHasCol : (cs : List Column) -> (s : String) -> Type where
-  Here  : ListHasCol (C s t :: cs) s
-  There : ListHasCol cs s -> ListHasCol (c::cs) s
+FindCol : String -> List Column -> Maybe SqliteType
+FindCol s []        = Nothing
+FindCol s (x :: xs) =
+  if x.name == s then Just x.type else FindCol s xs
 
-||| Convenience alias for `ListHasCol` working on the columns
-||| of a table.
-public export
-0 TableHasCol : Table -> String -> Type
-TableHasCol = ListHasCol . cols
+||| Column type of a column (given by name) in a list of
+||| columns.
+|||
+||| This requires a proof that the column actually is in the
+||| table.
+public export %inline
+ListColType :
+     (s        : String)
+  -> (cs       : List Column)
+  -> {auto 0 p : IsJust (FindCol s cs)}
+  -> SqliteType
+ListColType s cs = fromJust (FindCol s cs)
 
-||| Computes the SQLite column type associated with column `n`
-||| in the given list of columns.
-public export
-ListColType : (cs : List Column) -> ListHasCol cs n -> SqliteType
-ListColType (C n t :: cs) Here      = t
-ListColType (_     :: cs) (There x) = ListColType cs x
+||| Column type of a column (given by name) in a table.
+|||
+||| This requires a proof that the column actually is in the
+||| table.
+public export %inline
+TableColType :
+     (s        : String)
+  -> (t        : Table)
+  -> {auto 0 p : IsJust (FindCol s t.cols)}
+  -> SqliteType
+TableColType s t = fromJust (FindCol s t.cols)
 
 ||| A column in the given table: This is just a column name
 ||| paired with a proof that the column exists in table `t`.
@@ -49,27 +66,37 @@ public export
 record TColumn (t : Table) where
   constructor TC
   name : String
-  {auto 0 prf : TableHasCol t name}
+  {auto 0 prf : IsJust (FindCol name t.cols)}
 
-export %inline
-fromString : (s : String) -> (0 p : TableHasCol t s) => TColumn t
-fromString s = TC s
+public export %inline
+fromString :
+     {0 t      : Table}
+  -> (name     : String)
+  -> {auto 0 p : IsJust (FindCol name t.cols)}
+  -> TColumn t
+fromString = TC
 
 ||| A database schema is a list of tables.
 public export
 0 Schema : Type
 Schema = List Table
 
-||| Proof that a column named `c` exists in a table named `n` in
-||| schema `s`.
+||| Looks up a table and column name in a schema.
 public export
-data HasCol : (s : Schema) -> (n,c : String) -> Type where
-  SHere  : ListHasCol t c => HasCol (T n t :: ts) n c
-  SThere : HasCol ts n c -> HasCol (t::ts) n c
+FindSchemaCol :
+     (table, column : String)
+  -> Schema
+  -> Maybe SqliteType
+FindSchemaCol t c []        = Nothing
+FindSchemaCol t c (x :: xs) =
+  if x.name == t then FindCol c x.cols else FindSchemaCol t c xs
 
-||| Computes the SQLite column type associated with column `c`
-||| in table `n` in the given list of tables.
+||| Computes the SQLite column type associated with column `column`
+||| in table `table` in the given list of tables.
 public export
-ColType : (s : Schema) -> HasCol s n c -> SqliteType
-ColType (T n cs ::_) (SHere @{p}) = ListColType cs p
-ColType (_::xs)      (SThere p)   = ColType xs p
+SchemaColType :
+     (table, column : String)
+  -> (s             : Schema)
+  -> {auto 0 prf    : IsJust (FindSchemaCol table column s)}
+  -> SqliteType
+SchemaColType t c s = fromJust (FindSchemaCol t c s)

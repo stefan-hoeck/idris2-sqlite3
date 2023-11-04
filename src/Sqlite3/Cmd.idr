@@ -27,9 +27,9 @@ namespace Columns
          {0 t        : Table}
       -> {0 ts       : List SqliteType}
       -> (s          : String)
-      -> {auto 0 prf : TableHasCol t s}
+      -> {auto 0 prf : IsJust (FindCol s t.cols)}
       -> (cs         : Columns t ts)
-      -> Columns t (ListColType t.cols prf :: ts)
+      -> Columns t (TableColType s t :: ts)
 
   ||| Concatenates two lists of columns.
   export
@@ -82,8 +82,8 @@ public export
 record Val (t : Table) where
   constructor V
   name        : String
-  {auto 0 prf : TableHasCol t name}
-  val         : Expr [t] (ListColType t.cols prf)
+  {auto 0 prf : IsJust (FindCol name t.cols)}
+  val         : Expr [t] (TableColType name t)
 
 ||| Column and table constraints to be used when creating a new table.
 public export
@@ -97,8 +97,8 @@ data Constraint : Table -> Type where
   Default       :
        {0 t        : Table}
     -> (s          : String)
-    -> {auto 0 prf : TableHasCol t s}
-    -> (expr       : Expr [t] (ListColType t.cols prf))
+    -> {auto 0 prf : IsJust (FindCol s t.cols)}
+    -> (expr       : Expr [t] (TableColType s t))
     -> Constraint t
 
 ||| Index used to distinguish different types of commands.

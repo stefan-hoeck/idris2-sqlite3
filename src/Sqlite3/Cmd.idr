@@ -8,48 +8,26 @@ import Sqlite3.Types
 
 %default total
 
-namespace Columns
-  ||| A list of columns in a table indexed by the corresponding
-  ||| column type.
-  |||
-  ||| This is used for inserting values into a table using the `INSERT`
-  ||| command: Column names come in one list, while a corresponding
-  ||| list of values (expressions) comes in a second list (see
-  ||| `Sqlite3.Cmd.Exprs.Exprs`).
-  |||
-  ||| Note: Typically, the `ts` index of a column list is derived
-  |||       from a columns name and the proof of the name being in
-  |||       a table's list of columns.
-  public export
-  data Columns : (t : Table) -> (ts : List SqliteType) -> Type where
-    Nil  : Columns t []
-    (::) :
-         {0 t        : Table}
-      -> {0 ts       : List SqliteType}
-      -> (s          : String)
-      -> {auto 0 prf : IsJust (FindCol s t.cols)}
-      -> (cs         : Columns t ts)
-      -> Columns t (TableColType s t :: ts)
+||| A list of columns in a table indexed by the corresponding
+||| column type.
+|||
+||| This is used for inserting values into a table using the `INSERT`
+||| command: Column names come in one list, while a corresponding
+||| list of values (expressions) comes in a second list (see
+||| `Sqlite3.Cmd.Exprs.Exprs`).
+|||
+||| Note: Typically, the `ts` index of a column list is derived
+|||       from a columns name and the proof of the name being in
+|||       a table's list of columns.
+public export
+0 Columns : (t : Table) -> (ts : List SqliteType) -> Type
+Columns t = LAll (TColumn t)
 
-  ||| Concatenates two lists of columns.
-  export
-  (++) : Columns t xs -> Columns t ys -> Columns t (xs ++ ys)
-  (++) []     ws = ws
-  (++) (h::t) ws = h :: (t ++ ws)
-
-namespace Exprs
-  ||| A list of expressions to be inserted, updated, or selected
-  ||| in a table.
-  public export
-  data Exprs : (t : Table) -> (ts : List SqliteType) -> Type where
-    Nil  : Exprs t []
-    (::) : Expr [t] x -> Exprs t ts -> Exprs t (x::ts)
-
-  ||| Concatenates two lists of expressions.
-  export
-  (++) : Exprs t xs -> Exprs t ys -> Exprs t (xs ++ ys)
-  (++) []     ws = ws
-  (++) (h::t) ws = h :: (t ++ ws)
+||| A list of expressions to be inserted, updated, or selected
+||| in a table.
+public export
+0 Exprs : (t : Table) -> (ts : List SqliteType) -> Type
+Exprs t = LAll (Expr [t])
 
 namespace Values
   ||| A list of marshallable Idris values to be inserted or
@@ -88,11 +66,11 @@ record Val (t : Table) where
 ||| Column and table constraints to be used when creating a new table.
 public export
 data Constraint : Table -> Type where
-  NotNull       : TColumn t -> Constraint t
-  AutoIncrement : TColumn t -> Constraint t
-  Unique        : List (TColumn t) -> Constraint t
-  PrimaryKey    : List (TColumn t) -> Constraint t
-  ForeignKey    : List (TColumn t) -> Constraint t
+  NotNull       : {0 x : _} -> TColumn t x -> Constraint t
+  AutoIncrement : {0 x : _} -> TColumn t x -> Constraint t
+  Unique        : {0 xs : _} -> LAll (TColumn t) xs -> Constraint t
+  PrimaryKey    : {0 xs : _} -> LAll (TColumn t) xs -> Constraint t
+  ForeignKey    : {0 xs : _} -> LAll (TColumn t) xs -> Constraint t
   Check         : Expr [t] BOOL -> Constraint t
   Default       :
        {0 t        : Table}

@@ -24,6 +24,10 @@ record Table where
   name : String
   cols : List Column
 
+public export %inline
+ColTypes : Table -> List SqliteType
+ColTypes = map type . cols
+
 ||| Tries and looks up a column type by name
 ||| in a list of columns.
 |||
@@ -63,17 +67,19 @@ TableColType s t = fromJust (FindCol s t.cols)
 ||| A column in the given table: This is just a column name
 ||| paired with a proof that the column exists in table `t`.
 public export
-record TColumn (t : Table) where
-  constructor TC
-  name : String
-  {auto 0 prf : IsJust (FindCol name t.cols)}
+data TColumn : (t : Table) -> (tpe : SqliteType) -> Type where
+  TC :
+       {0 t        : Table}
+    -> (name       : String)
+    -> {auto 0 prf : IsJust (FindCol name t.cols)}
+    -> TColumn t (TableColType name t)
 
 public export %inline
 fromString :
      {0 t      : Table}
   -> (name     : String)
   -> {auto 0 p : IsJust (FindCol name t.cols)}
-  -> TColumn t
+  -> TColumn t (TableColType name t)
 fromString = TC
 
 ||| A database schema is a list of tables.

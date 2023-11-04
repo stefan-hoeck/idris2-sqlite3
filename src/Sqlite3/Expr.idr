@@ -21,13 +21,14 @@ data Expr : Schema -> SqliteType -> Type where
   Raw    : String -> Expr s t
   Col    :
        (tbl,col  : String)
-    -> {auto 0 p : HasCol s tbl col}
-    -> Expr s (ColType s p)
+    -> {auto 0 p : IsJust (FindSchemaCol tbl col s)}
+    -> Expr s (SchemaColType tbl col s)
 
   C      :
-       (col      : String)
-    -> {auto 0 p : TableHasCol t col}
-    -> Expr [t] (ListColType t.cols p)
+       {0 t      : Table}
+    -> (col      : String)
+    -> {auto 0 p : IsJust (FindCol col t.cols)}
+    -> Expr [t] (TableColType col t)
 
   (>)    : Expr s t -> Expr s t -> Expr s BOOL
   (<)    : Expr s t -> Expr s t -> Expr s BOOL
@@ -107,9 +108,10 @@ FromDouble (Expr s REAL) where
 
 export %inline
 fromString :
-     (col      : String)
-  -> {auto 0 p : TableHasCol t col}
-  -> Expr [t] (ListColType t.cols p)
+     {0 t      : Table}
+  -> (col      : String)
+  -> {auto 0 p : IsJust (FindCol col t.cols)}
+  -> Expr [t] (TableColType col t)
 fromString = C
 
 ||| Convert a value of a marshallable type to a literal expression.

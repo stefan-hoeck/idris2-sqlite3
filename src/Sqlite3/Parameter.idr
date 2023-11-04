@@ -4,6 +4,7 @@ import public Control.Monad.State
 
 import Data.Buffer.Indexed
 import Data.ByteString
+import Data.List.Quantifiers
 import Data.Maybe
 import Data.SortedMap
 import Data.String
@@ -145,23 +146,24 @@ addCol (CS cs ts) n v =
 addTbl : Constraints -> String -> Constraints
 addTbl (CS cs ss) s = CS cs (s::ss)
 
-names : List (TColumn t) -> String
-names = commaSep name
+names : SnocList String -> LAll (TColumn t) ts -> String
+names sc []           = commaSep id (sc <>> [])
+names sc (TC c :: cs) = names (sc :< c) cs
 
 encodeDflt : Expr s t -> String
 encodeDflt x         = "DEFAULT (\{encodeExpr x})"
 
 encConstraint : Constraints -> Constraint t -> Constraints
-encConstraint y (NotNull c)       = addCol y c.name "NOT NULL"
-encConstraint y (AutoIncrement c) = addCol y c.name "AUTOINCREMENT"
-encConstraint y (Unique [c])      = addCol y c.name "UNIQUE"
-encConstraint y (PrimaryKey [c])  = addCol y c.name "PRIMARY KEY"
-encConstraint y (ForeignKey [c])  = addCol y c.name "FOREIGN KEY"
-encConstraint y (Default s expr)  = addCol y s (encodeDflt expr)
-encConstraint y (Unique xs)       = addTbl y "UNIQUE (\{names xs})"
-encConstraint y (PrimaryKey xs)   = addTbl y "PRIMARY KEY (\{names xs})"
-encConstraint y (ForeignKey xs)   = addTbl y "FOREIGN KEY (\{names xs})"
-encConstraint y (Check x)         = addTbl y "CHECK (\{encodeExpr x})"
+encConstraint y (NotNull $ TC n)       = addCol y n"NOT NULL"
+encConstraint y (AutoIncrement $ TC n) = addCol y n "AUTOINCREMENT"
+encConstraint y (Unique [TC n])        = addCol y n "UNIQUE"
+encConstraint y (PrimaryKey [TC n])    = addCol y n "PRIMARY KEY"
+encConstraint y (ForeignKey [TC n])    = addCol y n "FOREIGN KEY"
+encConstraint y (Default s expr)       = addCol y s (encodeDflt expr)
+encConstraint y (Unique xs)            = addTbl y "UNIQUE (\{names [<] xs})"
+encConstraint y (PrimaryKey xs)        = addTbl y "PRIMARY KEY (\{names [<] xs})"
+encConstraint y (ForeignKey xs)        = addTbl y "FOREIGN KEY (\{names [<] xs})"
+encConstraint y (Check x)              = addTbl y "CHECK (\{encodeExpr x})"
 
 ine : Bool -> String
 ine True  = "IF NOT EXISTS"
@@ -180,8 +182,8 @@ encodeCols m = map encodeCol
        in "\{n} \{show t} \{constraints}"
 
 insertCols : SnocList String -> Columns t ts -> String
-insertCols sc []      = commaSep id (sc <>> [])
-insertCols sc (c::cs) = insertCols (sc :< c) cs
+insertCols sc []         = commaSep id (sc <>> [])
+insertCols sc (TC c::cs) = insertCols (sc :< c) cs
 
 exprs : SnocList String -> Exprs t ts -> ParamStmt
 exprs sc []      = pure $ commaSep id (sc <>> [])

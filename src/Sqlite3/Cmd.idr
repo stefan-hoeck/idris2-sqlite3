@@ -8,27 +8,6 @@ import Sqlite3.Types
 
 %default total
 
-||| A list of columns in a table indexed by the corresponding
-||| column type.
-|||
-||| This is used for inserting values into a table using the `INSERT`
-||| command: Column names come in one list, while a corresponding
-||| list of values (expressions) comes in a second list (see
-||| `Sqlite3.Cmd.Exprs.Exprs`).
-|||
-||| Note: Typically, the `ts` index of a column list is derived
-|||       from a columns name and the proof of the name being in
-|||       a table's list of columns.
-public export
-0 Columns : (t : Table) -> (ts : List SqliteType) -> Type
-Columns t = LAll (TColumn t)
-
-||| A list of expressions to be inserted, updated, or selected
-||| in a table.
-public export
-0 Exprs : (t : Table) -> (ts : List SqliteType) -> Type
-Exprs t = LAll (Expr [t])
-
 namespace Values
   ||| A list of marshallable Idris values to be inserted or
   ||| updated in a table.
@@ -51,7 +30,7 @@ namespace Values
   ||| We can always convert a list of marshallable Idris values to
   ||| a list of SQL expressions.
   export
-  toExprs : Values t ts -> Exprs t ts
+  toExprs : Values t ts -> LAll (Expr [t]) ts
   toExprs []        = []
   toExprs (v :: vs) = val v :: toExprs vs
 
@@ -107,15 +86,15 @@ data Cmd : CmdType -> Type where
   INSERT :
        {0 ts : List SqliteType}
     -> (t : Table)
-    -> (cols : Columns t ts)
-    -> (vals : Exprs t ts)
+    -> (cols : LAll (TColumn t) ts)
+    -> (vals : LAll (Expr [t]) ts)
     -> Cmd TInsert
 
   REPLACE :
        {0 ts : List SqliteType}
     -> (t : Table)
-    -> (cols : Columns t ts)
-    -> (vals : Exprs t ts)
+    -> (cols : LAll (TColumn t) ts)
+    -> (vals : LAll (Expr [t]) ts)
     -> Cmd TInsert
 
   UPDATE :
@@ -132,7 +111,7 @@ data Cmd : CmdType -> Type where
 export
 insert :
     (t : Table)
-  -> Columns t ts
+  -> LAll (TColumn t) ts
   -> Values t ts
   -> Cmd TInsert
 insert t cs vs = INSERT t cs (toExprs vs)
@@ -187,6 +166,6 @@ data Query : (ts : List SqliteType) -> Type where
   SELECT_FROM :
        {0 ts   : List SqliteType}
     -> (t      : Table)
-    -> (xs     : Exprs t ts)
+    -> (xs     : LAll (Expr [t]) ts)
     -> (where_ : Expr [t] BOOL)
     -> Query ts

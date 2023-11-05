@@ -181,11 +181,11 @@ encodeCols m = map encodeCol
       let constraints := fromMaybe "" (lookup n m)
        in "\{n} \{show t} \{constraints}"
 
-insertCols : SnocList String -> Columns t ts -> String
+insertCols : SnocList String -> LAll (TColumn t) ts -> String
 insertCols sc []         = commaSep id (sc <>> [])
 insertCols sc (TC c::cs) = insertCols (sc :< c) cs
 
-exprs : SnocList String -> Exprs t ts -> ParamStmt
+exprs : SnocList String -> LAll (Expr [t]) ts -> ParamStmt
 exprs sc []      = pure $ commaSep id (sc <>> [])
 exprs sc (c::cs) = do
   s <- encodeExprP c

@@ -58,6 +58,12 @@ app = withDB ":memory:" $ do
   traverse_ (putStrLn . encodeBytes . content . item) fs
   es <- query employee 1000
   traverse_ printLn es
+  hs <- query heads 1000
+  traverse_ printLn hs
+  ts <- query tuples 1000
+  traverse_ printLn ts
+  ps <- query nonHeads 1000
+  traverse_ printLn ps
 
 main : IO ()
 main = runApp handlers app

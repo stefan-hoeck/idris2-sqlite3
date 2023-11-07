@@ -1,6 +1,9 @@
 module Sqlite3.Table
 
+import public Data.List1
 import public Data.Maybe
+import public Data.SnocList
+import public Data.String
 import Sqlite3.Types
 
 %default total
@@ -22,7 +25,16 @@ public export
 record Table where
   constructor T
   name : String
+  as   : String
   cols : List Column
+
+public export %inline
+table : String -> List Column -> Table
+table n = T n n
+
+public export %inline
+AS : Table -> String -> Table
+AS (T n _ cs) as = T n as cs
 
 public export %inline
 ColTypes : Table -> List SqliteType
@@ -90,47 +102,63 @@ namespace TColumn
 ||| A database schema is a list of tables.
 public export
 0 Schema : Type
-Schema = List Table
+Schema = SnocList Table
 
 ||| Looks up a table and column name in a schema.
 public export
-FindSchemaCol :
-     (table, column : String)
-  -> Schema
-  -> Maybe SqliteType
-FindSchemaCol t c []        = Nothing
-FindSchemaCol t c (x :: xs) =
-  if x.name == t then FindCol c x.cols else FindSchemaCol t c xs
+FindSchemaCol2 : (table, column : String) -> Schema -> Maybe SqliteType
+FindSchemaCol2 t c [<]       = Nothing
+FindSchemaCol2 t c (sx :< x) =
+  if x.as == t then FindCol c x.cols else FindSchemaCol2 t c sx
+
+||| Looks up a table and column name in a schema.
+|||
+||| In case the schema has only one table, a column can be
+||| looked up just by its name, otherwise in needs to be
+||| prefixed by the table name separated by a dot.
+public export
+FindSchemaCol : String -> Schema -> Maybe SqliteType
+FindSchemaCol str [<tbl] =
+  case split ('.' ==) str of
+    n:::[]  => FindCol n tbl.cols
+    t:::[n] => FindSchemaCol2 t n [<tbl]
+    _       => Nothing
+FindSchemaCol str s =
+  case split ('.' ==) str of
+    t:::[n] => FindSchemaCol2 t n s
+    _       => Nothing
 
 ||| Computes the SQLite column type associated with column `column`
 ||| in table `table` in the given list of tables.
 public export
 SchemaColType :
-     (table, column : String)
+     (name : String)
   -> (s             : Schema)
-  -> {auto 0 prf    : IsJust (FindSchemaCol table column s)}
+  -> {auto 0 prf    : IsJust (FindSchemaCol name s)}
   -> SqliteType
-SchemaColType t c s = fromJust (FindSchemaCol t c s)
+SchemaColType n s = fromJust (FindSchemaCol n s)
 
 public export
 SchemaHasCol : Schema -> String -> Bool
-SchemaHasCol xs s = any (any ((s ==) . name) . cols) xs
+SchemaHasCol [<]       s = False
+SchemaHasCol (sx :< x) s = any ((s==) . name) x.cols || SchemaHasCol sx s
 
 ||| A column used in a `JOIN ... USING` statement: The column must
 ||| appear in both schemata.
 public export
-record JColumn (s,t : Schema) where
+record JColumn (s : Schema) (t : Table) where
   constructor JC
   name       : String
   {auto 0 p1 : SchemaHasCol s name === True}
-  {auto 0 p2 : SchemaHasCol t name === True}
+  {auto 0 p2 : IsJust (FindCol name t.cols)}
 
 namespace JColumn
   public export %inline
   fromString :
-       {0 s,t     : Schema}
+       {0 s       : Schema}
+    -> {0 t       : Table}
     -> (name      : String)
     -> {auto 0 p1 : SchemaHasCol s name === True}
-    -> {auto 0 p2 : SchemaHasCol t name === True}
+    -> {auto 0 p2 : IsJust (FindCol name t.cols)}
     -> JColumn s t
   fromString = JC

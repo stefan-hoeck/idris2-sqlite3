@@ -93,7 +93,6 @@ encodeExprP (Raw s)      = pure s
 encodeExprP NULL         = pure "NULL"
 encodeExprP TRUE         = pure "1"
 encodeExprP FALSE        = pure "0"
-encodeExprP (Col t c)    = pure "\{t}.\{c}"
 encodeExprP (C c)        = pure c
 
 encodeExprP CURRENT_TIME      = pure "CURRENT_TIME"
@@ -230,33 +229,34 @@ encodeCmd (DELETE t wh) = do
   xstr <- encodeExprP wh
   pure "DELETE FROM \{t.name} WHERE \{xstr};"
 
-join : (outer : Bool) -> String
-join True  = "LEFT OUTER JOIN"
-join False = "JOIN"
+joinPred : JoinPred s t -> ParamStmt
+joinPred (Left u)  = pure "USING (\{commaSep name u})"
+joinPred (Right x) = do
+  ez <- encodeExprP x
+  pure "ON \{ez}"
+
+tbl : Table -> String
+tbl (T n a _) = if n == a then n else "\{n} AS \{a}"
+
+join : Join s t -> ParamStmt
+join (JOIN t p) = do
+  ep <- joinPred p
+  pure "JOIN \{tbl t} \{ep}"
+
+join (OUTER_JOIN t p) = do
+  ep <- joinPred p
+  pure "LEFT OUTER JOIN \{tbl t} \{ep}"
+
+join (CROSS_JOIN t) = pure "CROSS JOIN \{tbl t}"
+join (FROM t)       = pure "FROM \{tbl t}"
 
 encodeFrom : From s -> ParamStmt
-encodeFrom (Tbl t)        = pure t.name
-encodeFrom (TblAs t name) = pure "\{t.name} AS \{name}"
-encodeFrom (JoinOn x y outer on) = do
-  ex <- encodeFrom x
-  ey <- encodeFrom y
-  ez <- encodeExprP on
-  pure "\{ex} \{join outer} \{ey} ON \{ez}"
-
-encodeFrom (JoinUsing x y outer u) = do
-  ex <- encodeFrom x
-  ey <- encodeFrom y
-  pure "\{ex} \{join outer} \{ey} USING (\{commaSep name u})"
-
-encodeFrom (Cross x y)   = do
-  ex <- encodeFrom x
-  ey <- encodeFrom y
-  pure "\{ex} CROSS JOIN \{ey}"
-
-encodeFrom (Natural x y) = do
-  ex <- encodeFrom x
-  ey <- encodeFrom y
-  pure "\{ex} NATURAL JOIN \{ey}"
+encodeFrom [<]      = pure ""
+encodeFrom [<x]     = join x
+encodeFrom (x :< y) = do
+  ef <- encodeFrom x
+  ej <- join y
+  pure "\{ef} \{ej}"
 
 ||| Encodes an SQLite `SELECT` statement.
 |||
@@ -268,4 +268,4 @@ encodeQuery (SELECT from vs where_) = do
   fstr <- encodeFrom from
   vstr <- exprs [<] vs
   wh   <- encodeExprP where_
-  pure "SELECT \{vstr} FROM \{fstr} WHERE \{wh}"
+  pure "SELECT \{vstr} \{fstr} WHERE \{wh}"

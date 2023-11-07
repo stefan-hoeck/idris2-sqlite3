@@ -153,17 +153,21 @@ names sc (TC c :: cs) = names (sc :< c) cs
 encodeDflt : Expr s t -> String
 encodeDflt x         = "DEFAULT (\{encodeExpr x})"
 
+references : (t : Table) -> LAll (TColumn t) xs -> String
+references t cs = "REFERENCES \{t.name} (\{names [<] cs})"
+
 encConstraint : Constraints -> Constraint t -> Constraints
 encConstraint y (NotNull $ TC n)       = addCol y n"NOT NULL"
 encConstraint y (AutoIncrement $ TC n) = addCol y n "AUTOINCREMENT"
 encConstraint y (Unique [TC n])        = addCol y n "UNIQUE"
 encConstraint y (PrimaryKey [TC n])    = addCol y n "PRIMARY KEY"
-encConstraint y (ForeignKey [TC n])    = addCol y n "FOREIGN KEY"
 encConstraint y (Default s expr)       = addCol y s (encodeDflt expr)
 encConstraint y (Unique xs)            = addTbl y "UNIQUE (\{names [<] xs})"
 encConstraint y (PrimaryKey xs)        = addTbl y "PRIMARY KEY (\{names [<] xs})"
-encConstraint y (ForeignKey xs)        = addTbl y "FOREIGN KEY (\{names [<] xs})"
 encConstraint y (Check x)              = addTbl y "CHECK (\{encodeExpr x})"
+encConstraint y (ForeignKey s [p] ys)  = addCol y p.name (references s ys)
+encConstraint y (ForeignKey s xs ys)   =
+  addTbl y "FOREIGN KEY (\{names [<] xs}) \{references s ys}"
 
 ine : Bool -> String
 ine True  = "IF NOT EXISTS"
@@ -185,7 +189,7 @@ insertCols : SnocList String -> LAll (TColumn t) ts -> String
 insertCols sc []         = commaSep id (sc <>> [])
 insertCols sc (TC c::cs) = insertCols (sc :< c) cs
 
-exprs : SnocList String -> LAll (Expr [t]) ts -> ParamStmt
+exprs : SnocList String -> LAll (Expr s) ts -> ParamStmt
 exprs sc []      = pure $ commaSep id (sc <>> [])
 exprs sc (c::cs) = do
   s <- encodeExprP c
@@ -226,13 +230,42 @@ encodeCmd (DELETE t wh) = do
   xstr <- encodeExprP wh
   pure "DELETE FROM \{t.name} WHERE \{xstr};"
 
+join : (outer : Bool) -> String
+join True  = "LEFT OUTER JOIN"
+join False = "JOIN"
+
+encodeFrom : From s -> ParamStmt
+encodeFrom (Tbl t)        = pure t.name
+encodeFrom (TblAs t name) = pure "\{t.name} AS \{name}"
+encodeFrom (JoinOn x y outer on) = do
+  ex <- encodeFrom x
+  ey <- encodeFrom y
+  ez <- encodeExprP on
+  pure "\{ex} \{join outer} \{ey} ON \{ez}"
+
+encodeFrom (JoinUsing x y outer u) = do
+  ex <- encodeFrom x
+  ey <- encodeFrom y
+  pure "\{ex} \{join outer} \{ey} USING (\{commaSep name u})"
+
+encodeFrom (Cross x y)   = do
+  ex <- encodeFrom x
+  ey <- encodeFrom y
+  pure "\{ex} CROSS JOIN \{ey}"
+
+encodeFrom (Natural x y) = do
+  ex <- encodeFrom x
+  ey <- encodeFrom y
+  pure "\{ex} NATURAL JOIN \{ey}"
+
 ||| Encodes an SQLite `SELECT` statement.
 |||
 ||| The query will be encoded as a string with parameters
 ||| inserted as placeholders for literal values where appropriate.
 export
 encodeQuery : Query ts -> ParamStmt
-encodeQuery (SELECT_FROM t vs where_) = do
+encodeQuery (SELECT from vs where_) = do
+  fstr <- encodeFrom from
   vstr <- exprs [<] vs
   wh   <- encodeExprP where_
-  pure "SELECT \{vstr} FROM \{t.name} WHERE \{wh}"
+  pure "SELECT \{vstr} FROM \{fstr} WHERE \{wh}"

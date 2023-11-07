@@ -21,7 +21,7 @@ record Val (t : Table) where
   constructor V
   name        : String
   {auto 0 prf : IsJust (FindCol name t.cols)}
-  val         : Expr [t] (TableColType name t)
+  val         : Expr [<t] (TableColType name t)
 
 ||| Column and table constraints to be used when creating a new table.
 public export
@@ -37,12 +37,12 @@ data Constraint : Table -> Type where
     -> LAll (TColumn s) xs
     -> Constraint t
 
-  Check         : Expr [t] BOOL -> Constraint t
+  Check         : Expr [<t] BOOL -> Constraint t
   Default       :
        {0 t        : Table}
     -> (s          : String)
     -> {auto 0 prf : IsJust (FindCol s t.cols)}
-    -> (expr       : Expr [t] (TableColType s t))
+    -> (expr       : Expr [<t] (TableColType s t))
     -> Constraint t
 
 ||| Index used to distinguish different types of commands.
@@ -74,25 +74,25 @@ data Cmd : CmdType -> Type where
        {0 ts : List SqliteType}
     -> (t : Table)
     -> (cols : LAll (TColumn t) ts)
-    -> (vals : LAll (Expr [t]) ts)
+    -> (vals : LAll (Expr [<t]) ts)
     -> Cmd TInsert
 
   REPLACE :
        {0 ts : List SqliteType}
     -> (t : Table)
     -> (cols : LAll (TColumn t) ts)
-    -> (vals : LAll (Expr [t]) ts)
+    -> (vals : LAll (Expr [<t]) ts)
     -> Cmd TInsert
 
   UPDATE :
        (t      : Table)
     -> (set    : List (Val t))
-    -> (where_ : Expr [t] BOOL)
+    -> (where_ : Expr [<t] BOOL)
     -> Cmd TUpdate
 
   DELETE :
        (t      : Table)
-    -> (where_ : Expr [t] BOOL)
+    -> (where_ : Expr [<t] BOOL)
     -> Cmd TDelete
 
 export
@@ -148,27 +148,43 @@ public export %inline
 dropTable : (t : Table) -> Cmd TDrop
 dropTable t = DROP_TABLE t False
 
+public export
+0 JoinPred : Schema -> Table -> Type
+JoinPred s t = Either (List $ JColumn  s t) (Expr (s:<t) BOOL)
+
+public export
+data Join : (s : Schema) -> (t : Table) -> Type where
+  JOIN :
+       {0 t0 : Table}
+    -> {0 s  : Schema}
+    -> (t : Table)
+    -> JoinPred (s:<t0) t
+    -> Join (s:<t0) t
+
+  OUTER_JOIN :
+       {0 t0 : Table}
+    -> {0 s  : Schema}
+    -> (t : Table)
+    -> JoinPred (s:<t0) t
+    -> Join (s:<t0) t
+
+  CROSS_JOIN : {0 t0 : _} -> {0 s : _} -> (t : Table) -> Join (s:<t0) t
+
+  FROM : (t : Table) -> Join [<] t
+
+public export %inline
+USING : (JoinPred s t -> Join s t) -> List (JColumn s t) -> Join s t
+USING f = f . Left
+
+public export %inline
+ON : (JoinPred s t -> Join s t) -> Expr (s:<t) BOOL -> Join s t
+ON f = f . Right
+
 ||| The `FROM` part in a select statement.
 public export
 data From : (s : Schema) -> Type where
-  Tbl     : (t : Table) -> From [t]
-  TblAs   : (t : Table) -> (name : String) -> From [T name t.cols]
-  Cross   : From s -> From t -> From (s ++ t)
-  Natural : From s -> From t -> From (s ++ t)
-
-  JoinOn  :
-       From s
-    -> From t
-    -> (outer : Bool)
-    -> (on    : Expr (s ++ t) BOOL)
-    -> From (s++t)
-
-  JoinUsing  :
-       From s
-    -> From t
-    -> (outer  : Bool)
-    -> (using_ : List (JColumn s t))
-    -> From (s++t)
+  Lin  : From [<]
+  (:<) : From s -> Join s t -> From (s :< t)
 
 ||| Different types of `SELECT` commands.
 public export
@@ -179,3 +195,7 @@ data Query : Type -> Type where
     -> (xs      : LAll (Expr s) (RowTypes t))
     -> (where_  : Expr s BOOL)
     -> Query t
+
+public export
+0 LQuery : List Type -> Type
+LQuery = Query . HList

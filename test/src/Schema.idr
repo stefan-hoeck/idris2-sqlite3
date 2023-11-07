@@ -12,7 +12,7 @@ import Enum
 public export
 Units : Table
 Units =
-  T "units"
+  table "units"
   [ C "unit_id" INTEGER
   , C "name"    TEXT
   , C "head"    INTEGER
@@ -21,7 +21,7 @@ Units =
 public export
 Employees : Table
 Employees =
-  T "employees"
+  table "employees"
     [ C "employee_id" INTEGER
     , C "name"        TEXT
     , C "salary"      REAL
@@ -31,7 +31,7 @@ Employees =
 public export
 Molecules : Table
 Molecules =
-  T "molecules"
+  table "molecules"
     [ C "molecule_id" INTEGER
     , C "name"        TEXT
     , C "casnr"       TEXT
@@ -42,7 +42,7 @@ Molecules =
 public export
 Files : Table
 Files =
-  T "files"
+  table "files"
     [ C "file_id" INTEGER
     , C "content" BLOB
     ]
@@ -168,22 +168,51 @@ insertFile = insert Files ["content"]
 --------------------------------------------------------------------------------
 
 export
-mol : Expr [Molecules] BOOL -> Query (Item Molecule)
+mol : Expr [<Molecules] BOOL -> Query (Item Molecule)
 mol =
-  SELECT (Tbl Molecules) ["molecule_id", "name", "casnr", "molweight", "type"]
+  SELECT [<FROM Molecules] ["molecule_id", "name", "casnr", "molweight", "type"]
 
 export
-file : Expr [Files] BOOL -> Query (Item File)
-file = SELECT (Tbl Files) ["file_id", "content"]
+file : Expr [<Files] BOOL -> Query (Item File)
+file = SELECT [<FROM Files] ["file_id", "content"]
 
 export
 employee : Query (Item $ Employee String)
 employee =
   SELECT
-    (JoinUsing (TblAs Employees "e") (TblAs Units "u") False ["unit_id"])
-    [ Col "e" "employee_id"
-    , Col "e" "name"
-    , Col "e" "salary"
-    , Col "u" "name"
+    [< FROM (Employees `AS` "e")
+    ,  JOIN (Units `AS` "u") `USING` ["unit_id"]
     ]
-    (Col "e" "salary" > 3000.0)
+    ["e.employee_id", "e.name", "e.salary", "u.name"]
+    ("e.salary" > 3000.0)
+
+export
+heads : Query (OrgUnit String)
+heads =
+  SELECT
+    [< FROM $ Employees `AS` "e"
+    ,  JOIN (Units `AS` "u") `ON` ("e.employee_id" == "u.head")
+    ]
+    ["u.name", "e.name"]
+    TRUE
+
+export
+nonHeads : LQuery [Bits32, String]
+nonHeads =
+  SELECT
+    [< FROM $ Employees `AS` "e"
+    ,  OUTER_JOIN (Units `AS` "u") `ON` ("e.employee_id" == "u.head")
+    ]
+    ["e.employee_id", "e.name"]
+    (IS NULL "u.head")
+
+export
+tuples : LQuery [String,Double,Double,MolType]
+tuples =
+  SELECT
+    [< FROM $ Employees `AS` "e"
+    ,  CROSS_JOIN $ Molecules `AS` "m1"
+    ,  CROSS_JOIN $ Molecules `AS` "m2"
+    ]
+    ["e.name", "m1.molweight", "m2.molweight", "m1.type"]
+    ("m1.molweight" < "m2.molweight")

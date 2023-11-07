@@ -19,16 +19,11 @@ data Expr : Schema -> SqliteType -> Type where
   TRUE   : Expr s BOOL
   FALSE  : Expr s BOOL
   Raw    : String -> Expr s t
-  Col    :
-       (tbl,col  : String)
-    -> {auto 0 p : IsJust (FindSchemaCol tbl col s)}
-    -> Expr s (SchemaColType tbl col s)
-
   C      :
-       {0 t      : Table}
+       {0 s      : Schema}
     -> (col      : String)
-    -> {auto 0 p : IsJust (FindCol col t.cols)}
-    -> Expr [t] (TableColType col t)
+    -> {auto 0 p : IsJust (FindSchemaCol col s)}
+    -> Expr s (SchemaColType col s)
 
   (>)    : Expr s t -> Expr s t -> Expr s BOOL
   (<)    : Expr s t -> Expr s t -> Expr s BOOL
@@ -108,10 +103,10 @@ FromDouble (Expr s REAL) where
 
 export %inline
 fromString :
-     {0 t      : Table}
+     {s        : Schema}
   -> (col      : String)
-  -> {auto 0 p : IsJust (FindCol col t.cols)}
-  -> Expr [t] (TableColType col t)
+  -> {auto 0 p : IsJust (FindSchemaCol col s)}
+  -> Expr s (SchemaColType col s)
 fromString = C
 
 ||| Convert a value of a marshallable type to a literal expression.
@@ -251,7 +246,6 @@ encodeExpr (NOT x)      = encPrefix "NOT" x
 encodeExpr (NegI x)     = encPrefix "-" x
 encodeExpr (NegD x)     = encPrefix "-" x
 encodeExpr (Raw s)      = s
-encodeExpr (Col t c)    = "\{t}.\{c}"
 encodeExpr (C c)        = c
 encodeExpr NULL         = "NULL"
 encodeExpr TRUE         = "1"

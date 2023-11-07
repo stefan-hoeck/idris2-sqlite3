@@ -8,31 +8,12 @@ import Sqlite3.Types
 
 %default total
 
-namespace Values
-  ||| A list of marshallable Idris values to be inserted or
-  ||| updated in a table.
-  public export
-  data Values : (t : Table) -> (ts : List SqliteType) -> Type where
-    Nil  : Values t []
-    (::) :
-         {0 a : Type}
-      -> (val : a)
-      -> {auto prf : AsCell a}
-      -> Values t ts
-      -> Values t (CellType a ::ts)
-
-  ||| Concatenates two lists of expressions.
-  export
-  (++) : Values t xs -> Values t ys -> Values t (xs ++ ys)
-  (++) []     ws = ws
-  (++) (h::t) ws = h :: (t ++ ws)
-
-  ||| We can always convert a list of marshallable Idris values to
-  ||| a list of SQL expressions.
-  export
-  toExprs : Values t ts -> LAll (Expr [t]) ts
-  toExprs []        = []
-  toExprs (v :: vs) = val v :: toExprs vs
+||| We can always convert a list of marshallable Idris values to
+||| a list of SQL expressions.
+export
+toExprs : {ts : _} -> LAll (Maybe . IdrisType) ts -> LAll (Expr s) ts
+toExprs {ts = []}    []      = []
+toExprs {ts = t::ts} (v::vs) = maybe NULL (Lit t) v :: toExprs vs
 
 ||| A single name-value pair in an `UPDATE` statement.
 public export
@@ -49,7 +30,13 @@ data Constraint : Table -> Type where
   AutoIncrement : {0 x : _} -> TColumn t x -> Constraint t
   Unique        : {0 xs : _} -> LAll (TColumn t) xs -> Constraint t
   PrimaryKey    : {0 xs : _} -> LAll (TColumn t) xs -> Constraint t
-  ForeignKey    : {0 xs : _} -> LAll (TColumn t) xs -> Constraint t
+  ForeignKey    :
+       {0 xs : _}
+    -> (s       : Table)
+    -> LAll (TColumn t) xs
+    -> LAll (TColumn s) xs
+    -> Constraint t
+
   Check         : Expr [t] BOOL -> Constraint t
   Default       :
        {0 t        : Table}
@@ -110,11 +97,12 @@ data Cmd : CmdType -> Type where
 
 export
 insert :
-    (t : Table)
-  -> LAll (TColumn t) ts
-  -> Values t ts
+    {auto as : AsRow v}
+  ->(t      : Table)
+  -> LAll (TColumn t) (RowTypes v)
+  -> (value : v)
   -> Cmd TInsert
-insert t cs vs = INSERT t cs (toExprs vs)
+insert t cs value = INSERT t cs (toExprs $ toRow value)
 
 namespace Cmds
   ||| A list of different types of commands, with the
@@ -160,12 +148,34 @@ public export %inline
 dropTable : (t : Table) -> Cmd TDrop
 dropTable t = DROP_TABLE t False
 
+||| The `FROM` part in a select statement.
+public export
+data From : (s : Schema) -> Type where
+  Tbl     : (t : Table) -> From [t]
+  TblAs   : (t : Table) -> (name : String) -> From [T name t.cols]
+  Cross   : From s -> From t -> From (s ++ t)
+  Natural : From s -> From t -> From (s ++ t)
+
+  JoinOn  :
+       From s
+    -> From t
+    -> (outer : Bool)
+    -> (on    : Expr (s ++ t) BOOL)
+    -> From (s++t)
+
+  JoinUsing  :
+       From s
+    -> From t
+    -> (outer  : Bool)
+    -> (using_ : List (JColumn s t))
+    -> From (s++t)
+
 ||| Different types of `SELECT` commands.
 public export
-data Query : (ts : List SqliteType) -> Type where
-  SELECT_FROM :
-       {0 ts   : List SqliteType}
-    -> (t      : Table)
-    -> (xs     : LAll (Expr [t]) ts)
-    -> (where_ : Expr [t] BOOL)
-    -> Query ts
+data Query : Type -> Type where
+  SELECT :
+       {auto as : AsRow t}
+    -> (from    : From s)
+    -> (xs      : LAll (Expr s) (RowTypes t))
+    -> (where_  : Expr s BOOL)
+    -> Query t

@@ -115,11 +115,5 @@ parameters {auto has : Has SqlError es}
       runCommands (c::cs) = cmd c >> runCommands cs
 
   export %inline
-  query :
-       {auto db : DB}
-    -> Query ts
-    -> {auto db : AsRow a}
-    -> {auto 0 prf : ts === RowTypes a}
-    -> Nat
-    -> App es (List a)
-  query q = selectRows (encodeQuery q)
+  query : {auto db : DB} -> Query t -> Nat -> App es (List t)
+  query q@(SELECT _ _ _) = selectRows (encodeQuery q)

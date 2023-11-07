@@ -75,12 +75,17 @@ data TColumn : (t : Table) -> (tpe : SqliteType) -> Type where
     -> TColumn t (TableColType name t)
 
 public export %inline
-fromString :
-     {0 t      : Table}
-  -> (name     : String)
-  -> {auto 0 p : IsJust (FindCol name t.cols)}
-  -> TColumn t (TableColType name t)
-fromString = TC
+(.name) : TColumn t x -> String
+(.name) (TC n) = n
+
+namespace TColumn
+  public export %inline
+  fromString :
+       {0 t      : Table}
+    -> (name     : String)
+    -> {auto 0 p : IsJust (FindCol name t.cols)}
+    -> TColumn t (TableColType name t)
+  fromString = TC
 
 ||| A database schema is a list of tables.
 public export
@@ -106,3 +111,26 @@ SchemaColType :
   -> {auto 0 prf    : IsJust (FindSchemaCol table column s)}
   -> SqliteType
 SchemaColType t c s = fromJust (FindSchemaCol t c s)
+
+public export
+SchemaHasCol : Schema -> String -> Bool
+SchemaHasCol xs s = any (any ((s ==) . name) . cols) xs
+
+||| A column used in a `JOIN ... USING` statement: The column must
+||| appear in both schemata.
+public export
+record JColumn (s,t : Schema) where
+  constructor JC
+  name       : String
+  {auto 0 p1 : SchemaHasCol s name === True}
+  {auto 0 p2 : SchemaHasCol t name === True}
+
+namespace JColumn
+  public export %inline
+  fromString :
+       {0 s,t     : Schema}
+    -> (name      : String)
+    -> {auto 0 p1 : SchemaHasCol s name === True}
+    -> {auto 0 p2 : SchemaHasCol t name === True}
+    -> JColumn s t
+  fromString = JC

@@ -173,13 +173,11 @@ mol x =
   SELECT
     ["molecule_id", "name", "casnr", "molweight", "type"]
     [<FROM Molecules]
-    x
-    []
-    []
+  `WHERE` x
 
 export
 file : Expr [<Files] BOOL -> Query (Item File)
-file x = SELECT ["file_id", "content"] [<FROM Files] x [] []
+file x = SELECT ["file_id", "content"] [<FROM Files] `WHERE` x
 
 export
 employee : Query (Item $ Employee String)
@@ -189,9 +187,8 @@ employee =
     [< FROM (Employees `AS` "e")
     ,  JOIN (Units `AS` "u") `USING` ["unit_id"]
     ]
-    ("e.salary" > 3000.0)
-    []
-    [O "e.salary" None ASC, O "e.name" NOCASE ASC]
+  `WHERE`    ("e.salary" > 3000.0)
+  `ORDER_BY` [O "e.salary" None ASC, O "e.name" NOCASE ASC]
 
 export
 unitStats : LQuery [String,Bits32,Double,Double,Double]
@@ -201,9 +198,7 @@ unitStats =
     [< FROM (Employees `AS` "e")
     ,  JOIN (Units `AS` "u") `USING` ["unit_id"]
     ]
-    TRUE
-    [O "e.unit_id" None NoAsc]
-    []
+    `GROUP_BY` [O "e.unit_id" None NoAsc]
 
 export
 heads : Query (OrgUnit String)
@@ -213,9 +208,6 @@ heads =
     [< FROM $ Employees `AS` "e"
     ,  JOIN (Units `AS` "u") `ON` ("e.employee_id" == "u.head")
     ]
-    TRUE
-    []
-    []
 
 export
 nonHeads : LQuery [Bits32, String]
@@ -225,9 +217,8 @@ nonHeads =
     [< FROM $ Employees `AS` "e"
     ,  OUTER_JOIN (Units `AS` "u") `ON` ("e.employee_id" == "u.head")
     ]
-    (IS NULL "u.head")
-    []
-    [O "e.name" None ASC]
+    `WHERE`    IS NULL "u.head"
+    `ORDER_BY` [O "e.name" None ASC]
 
 export
 tuples : LQuery [String,Double,Double,MolType]
@@ -238,6 +229,4 @@ tuples =
     ,  CROSS_JOIN $ Molecules `AS` "m1"
     ,  CROSS_JOIN $ Molecules `AS` "m2"
     ]
-    ("m1.molweight" < "m2.molweight")
-    []
-    []
+    `WHERE` ("m1.molweight" < "m2.molweight")

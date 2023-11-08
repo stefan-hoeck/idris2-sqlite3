@@ -301,7 +301,7 @@ encodeOrd s xs = do
 ||| inserted as placeholders for literal values where appropriate.
 export
 encodeQuery : Query ts -> ParamStmt
-encodeQuery (SELECT vs from where_ group_by order_by) = do
+encodeQuery (Q _ from vs where_ group_by order_by) = do
   vstr <- exprs [<] vs
   fstr <- encodeFrom from
   wh   <- encodeExprP where_

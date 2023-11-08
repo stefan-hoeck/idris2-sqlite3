@@ -209,16 +209,39 @@ record OrderingTerm (s : Schema) where
 
 ||| Different types of `SELECT` commands.
 public export
-data Query : Type -> Type where
-  SELECT :
-       {auto as   : AsRow t}
-    -> (xs        : LAll (Expr s) (RowTypes t))
-    -> (from      : From s)
-    -> (where_    : Expr s BOOL)
-    -> (group_by  : List (OrderingTerm s))
-    -> (order_by  : List (OrderingTerm s))
-    -> Query t
+record Query (t : Type) where
+  [noHints]
+  constructor Q
+  {auto asRow : AsRow t}
+  schema      : Schema
+  from        : From schema
+  columns     : LAll (Expr schema) (RowTypes t)
+  where_      : Expr schema BOOL
+  group_by    : List (OrderingTerm schema)
+  order_by    : List (OrderingTerm schema)
+
+public export %inline %hint
+queryAsRow : (q : Query t) => AsRow t
+queryAsRow = q.asRow
 
 public export
 0 LQuery : List Type -> Type
 LQuery = Query . HList
+
+infixl 7 `GROUP_BY`,`ORDER_BY`,`WHERE`
+
+public export %inline
+SELECT : {s : _} -> AsRow t => LAll (Expr s) (RowTypes t) -> From s -> Query t
+SELECT xs from = Q s from xs TRUE [] []
+
+public export %inline
+GROUP_BY : (q : Query t) -> List (OrderingTerm q.schema) -> Query t
+GROUP_BY q os = {group_by := os} q
+
+public export %inline
+WHERE : (q : Query t) -> Expr q.schema BOOL -> Query t
+WHERE q p = {where_ := p} q
+
+public export %inline
+ORDER_BY : (q : Query t) -> List (OrderingTerm q.schema) -> Query t
+ORDER_BY q os = {order_by := os} q

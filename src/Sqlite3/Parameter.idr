@@ -258,14 +258,39 @@ encodeFrom (x :< y) = do
   ej <- join y
   pure "\{ef} \{ej}"
 
+asc : AscDesc -> String
+asc ASC  = "ASC"
+asc DESC = "DESC"
+
+collate : Collation t -> String
+collate None   = ""
+collate NOCASE = "COLLATE NOCASE"
+
+encodeOrderingTerm : OrderingTerm t -> ParamStmt
+encodeOrderingTerm (O expr coll a) = do
+  ex <- encodeExprP expr
+  pure "\{ex} \{collate coll} \{asc a}"
+
+encodeOrd : List (OrderingTerm t) -> ParamStmt
+encodeOrd [] = pure ""
+encodeOrd xs = go [<] xs
+  where
+    go : SnocList String -> List (OrderingTerm t) -> ParamStmt
+    go ss []      = pure $ "ORDER BY \{commaSep id (ss <>> [])}"
+    go ss (x::xs) = do
+      s <- encodeOrderingTerm x
+      go (ss :< s) xs
+
+
 ||| Encodes an SQLite `SELECT` statement.
 |||
 ||| The query will be encoded as a string with parameters
 ||| inserted as placeholders for literal values where appropriate.
 export
 encodeQuery : Query ts -> ParamStmt
-encodeQuery (SELECT from vs where_) = do
-  fstr <- encodeFrom from
+encodeQuery (SELECT vs from where_ order_by) = do
   vstr <- exprs [<] vs
+  fstr <- encodeFrom from
   wh   <- encodeExprP where_
-  pure "SELECT \{vstr} \{fstr} WHERE \{wh}"
+  ord  <- encodeOrd order_by
+  pure "SELECT \{vstr} \{fstr} WHERE \{wh} \{ord}"

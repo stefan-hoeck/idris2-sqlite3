@@ -186,14 +186,36 @@ data From : (s : Schema) -> Type where
   Lin  : From [<]
   (:<) : From s -> Join s t -> From (s :< t)
 
+||| Tag indicating, whether results should be sorted in ascending
+||| or descending order.
+public export
+data AscDesc = ASC | DESC
+
+||| Different collations used during ordering.
+|||
+||| Currently, only `NO CASE` is supported.
+public export
+data Collation : (t : SqliteType) -> Type where
+  None   : Collation t
+  NOCASE : Collation TEXT
+
+public export
+record OrderingTerm (s : Schema) where
+  constructor O
+  {0 tpe : SqliteType}
+  expr : Expr s tpe
+  coll : Collation tpe
+  asc  : AscDesc
+
 ||| Different types of `SELECT` commands.
 public export
 data Query : Type -> Type where
   SELECT :
        {auto as : AsRow t}
-    -> (from    : From s)
-    -> (xs      : LAll (Expr s) (RowTypes t))
-    -> (where_  : Expr s BOOL)
+    -> (xs       : LAll (Expr s) (RowTypes t))
+    -> (from     : From s)
+    -> (where_   : Expr s BOOL)
+    -> (order_by : List (OrderingTerm s))
     -> Query t
 
 public export

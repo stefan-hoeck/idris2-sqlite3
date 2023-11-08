@@ -116,4 +116,4 @@ parameters {auto has : Has SqlError es}
 
   export %inline
   query : {auto db : DB} -> Query t -> Nat -> App es (List t)
-  query q@(SELECT {}) = selectRows (encodeQuery q)
+  query q = selectRows (encodeQuery q)

@@ -189,7 +189,7 @@ data From : (s : Schema) -> Type where
 ||| Tag indicating, whether results should be sorted in ascending
 ||| or descending order.
 public export
-data AscDesc = ASC | DESC
+data AscDesc = NoAsc | ASC | DESC
 
 ||| Different collations used during ordering.
 |||
@@ -211,11 +211,12 @@ record OrderingTerm (s : Schema) where
 public export
 data Query : Type -> Type where
   SELECT :
-       {auto as : AsRow t}
-    -> (xs       : LAll (Expr s) (RowTypes t))
-    -> (from     : From s)
-    -> (where_   : Expr s BOOL)
-    -> (order_by : List (OrderingTerm s))
+       {auto as   : AsRow t}
+    -> (xs        : LAll (Expr s) (RowTypes t))
+    -> (from      : From s)
+    -> (where_    : Expr s BOOL)
+    -> (group_by  : List (OrderingTerm s))
+    -> (order_by  : List (OrderingTerm s))
     -> Query t
 
 public export

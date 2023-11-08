@@ -37,7 +37,7 @@ app = withDB ":memory:" $ do
     , insertMol $ M "Strychnine" (Just "57-24-9") (Just 334.419) Compound
     , insertMol $ M "Atropine"   (Just "51-55-8") (Just 289.375) Compound
     , insertMol $ M "Sub1"       Nothing          Nothing Polymer
-    , insertUnit $ U "sales" 1
+    , insertUnit $ U "Sales" 1
     , insertUnit $ U "R&D" 2
     , insertUnit $ U "HR" 3
     , insertEmployee $ E "Sarah" 8300.0 1
@@ -64,6 +64,8 @@ app = withDB ":memory:" $ do
   traverse_ printLn ts
   ps <- query nonHeads 1000
   traverse_ printLn ps
+  ss <- query unitStats 1000
+  traverse_ printLn ss
 
 main : IO ()
 main = runApp handlers app

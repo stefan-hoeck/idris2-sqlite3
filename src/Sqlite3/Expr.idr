@@ -11,91 +11,257 @@ import Sqlite3.Types
 
 %default total
 
-||| Type representing well-typed SQLite expressions.
+public export
+data Numeric : SqliteType -> Type where
+  N_INTEGER : Numeric INTEGER
+  N_REAL    : Numeric REAL
+
+||| A syntax tree type representing well-typed SQLite expressions.
 public export
 data Expr : Schema -> SqliteType -> Type where
+  ||| A literal value in an SQL expression
   Lit    : (t : SqliteType) -> (v : IdrisType t) -> Expr s t
+
+  ||| The `NULL` literal
   NULL   : Expr s t
+
+  ||| Alias for the literal `1`, which corresponds to `True` in
+  ||| boolean expressions
   TRUE   : Expr s BOOL
+
+  ||| Alias for the literal `0`, which corresponds to `False` in
+  ||| boolean expressions
   FALSE  : Expr s BOOL
+
+  ||| A raw expressions string that will be used as given.
   Raw    : String -> Expr s t
+
+  ||| A column in a list of tables. Typically, it is convenient to
+  ||| use string literals directly for this (see `Expr.fromString`).
   C      :
        {0 s      : Schema}
     -> (col      : String)
     -> {auto 0 p : IsJust (FindSchemaCol col s)}
     -> Expr s (SchemaColType col s)
 
+  ||| Greater-than operator.
+  |||
+  ||| Note, that this is subject to SQL's three-valued logic in the
+  ||| presence of `NULL`.
   (>)    : Expr s t -> Expr s t -> Expr s BOOL
+
+  ||| Less-than operator.
+  |||
+  ||| Note, that this is subject to SQL's three-valued logic in the
+  ||| presence of `NULL`.
   (<)    : Expr s t -> Expr s t -> Expr s BOOL
+
+  ||| Greater-than or equals operator.
+  |||
+  ||| Note, that this is subject to SQL's three-valued logic in the
+  ||| presence of `NULL`.
   (>=)   : Expr s t -> Expr s t -> Expr s BOOL
+
+  ||| Less-than or equals operator.
+  |||
+  ||| Note, that this is subject to SQL's three-valued logic in the
+  ||| presence of `NULL`.
   (<=)   : Expr s t -> Expr s t -> Expr s BOOL
+
+  ||| Equality operator.
+  |||
+  ||| Note, that this is subject to SQL's three-valued logic in the
+  ||| presence of `NULL`.
   (==)   : Expr s t -> Expr s t -> Expr s BOOL
+
+  ||| Inequality operator.
+  |||
+  ||| We use the same operator as in the `Eq` interface here, but this
+  ||| corresponds to SQL's `<>` (or `!=`) operator.
+  |||
+  ||| Note, that this is subject to SQL's three-valued logic in the
+  ||| presence of `NULL`.
   (/=)   : Expr s t -> Expr s t -> Expr s BOOL
+
+  ||| Equality test.
+  |||
+  ||| Unlike `(==)`, this will always result in `TRUE` or `FALSE`
+  ||| even in the presence of `NULL`.
   IS     : Expr s t -> Expr s t -> Expr s BOOL
+
+  ||| Inequality test.
+  |||
+  ||| Unlike `(==)`, this will always result in `TRUE` or `FALSE`
+  ||| even in the presence of `NULL`.
   IS_NOT : Expr s t -> Expr s t -> Expr s BOOL
+
+  ||| Logical `AND`.
+  |||
+  ||| Note, that this is subject to SQL's three-valued logic in the
+  ||| presence of `NULL`.
   (&&)   : Expr s BOOL -> Expr s BOOL -> Expr s BOOL
+
+  ||| Logical `OR`.
+  |||
+  ||| Note, that this is subject to SQL's three-valued logic in the
+  ||| presence of `NULL`.
   (||)   : Expr s BOOL -> Expr s BOOL -> Expr s BOOL
+
+  ||| Logical negation.
+  |||
+  ||| Note, that this is subject to SQL's three-valued logic in the
+  ||| presence of `NULL`.
   NOT    : Expr s BOOL -> Expr s BOOL
+
+  ||| Bit-wise `AND`.
+  |||
+  ||| This corresponds to SQLite's `&` operator.
   (.&.)  : Expr s INTEGER -> Expr s INTEGER -> Expr s INTEGER
+
+  ||| Bit-wise `OR`.
+  |||
+  ||| This corresponds to SQLite's `|` operator.
   (.|.)  : Expr s INTEGER -> Expr s INTEGER -> Expr s INTEGER
+
+  ||| Bit-wise left shift.
+  |||
+  ||| This corresponds to SQLite's `<<` operator.
   ShiftL : Expr s INTEGER -> Expr s INTEGER -> Expr s INTEGER
+
+  ||| Bit-wise right shift.
+  |||
+  ||| This corresponds to SQLite's `>>` operator.
   ShiftR : Expr s INTEGER -> Expr s INTEGER -> Expr s INTEGER
 
-  AddI   : Expr s INTEGER -> Expr s INTEGER -> Expr s INTEGER
-  MultI  : Expr s INTEGER -> Expr s INTEGER -> Expr s INTEGER
-  SubI   : Expr s INTEGER -> Expr s INTEGER -> Expr s INTEGER
-  NegI   : Expr s INTEGER -> Expr s INTEGER
-  DivI   : Expr s INTEGER -> Expr s INTEGER -> Expr s INTEGER
-  Mod    : Expr s INTEGER -> Expr s INTEGER -> Expr s INTEGER
 
-  AddD   : Expr s REAL -> Expr s REAL -> Expr s REAL
-  MultD  : Expr s REAL -> Expr s REAL -> Expr s REAL
-  SubD   : Expr s REAL -> Expr s REAL -> Expr s REAL
-  NegD   : Expr s REAL -> Expr s REAL
-  DivD   : Expr s REAL -> Expr s REAL -> Expr s REAL
+  ||| Numeric addition.
+  |||
+  ||| Since `Expr s t` implements `Num` for numeric types `t`, you can
+  ||| typically use the addition operator `(+)` instead of this constructor.
+  Add   : (0 prf : Numeric t) => Expr s t -> Expr s t -> Expr s t
 
+  ||| Numeric multiplication.
+  |||
+  ||| Since `Expr s t` implements `Num` for numeric types `t`, you can
+  ||| typically use the multiplication operator `(*)` instead of this
+  ||| constructor.
+  Mult  : (0 prf : Numeric t) => Expr s t -> Expr s t -> Expr s t
+
+  ||| Numeric subtraction.
+  |||
+  ||| Since `Expr s t` implements `Neg` for numeric types `t`, you can
+  ||| typically use the subtraction operator `(-)` instead of this
+  ||| constructor.
+  Sub   : (0 prf : Numeric t) => Expr s t -> Expr s t -> Expr s t
+
+  ||| Computes the absolute of an expressions.
+  |||
+  ||| This corresponds to the `abs()` function.
+  Abs   : (0 prf : Numeric t) => Expr s t -> Expr s t
+
+  ||| Numeric negation.
+  Neg   : (0 prf : Numeric t) => Expr s t -> Expr s t
+
+  ||| Numeric division.
+  |||
+  ||| Since `Expr s t` implements `Integral` for numeric types `INTEGER`,
+  ||| you can typically use `div` for integer division. Likewise, you can
+  ||| use `(/)` for floating point division.
+  Div   : (0 prf : Numeric t) => Expr s t -> Expr s t -> Expr s t
+
+  ||| Computes the modulus of two integers.
+  |||
+  ||| This corresponds to the `%` operator in SQL.
+  Mod   : Expr s INTEGER -> Expr s INTEGER -> Expr s INTEGER
+
+  ||| String concatenation.
+  |||
+  ||| This corresponds to the `||` operator in SQL.
   (++)   : Expr s TEXT -> Expr s TEXT -> Expr s TEXT
 
+  ||| The current time as a string.
   CURRENT_TIME      : Expr s TEXT
+
+  ||| The current date as a string.
   CURRENT_DATE      : Expr s TEXT
+
+  ||| The current date and time as a string.
   CURRENT_TIMESTAMP : Expr s TEXT
-  LIKE              : Expr s TEXT -> Expr s TEXT -> Expr s BOOL
-  NOT_LIKE          : Expr s TEXT -> Expr s TEXT -> Expr s BOOL
-  GLOB              : Expr s TEXT -> Expr s TEXT -> Expr s BOOL
-  NOT_GLOB          : Expr s TEXT -> Expr s TEXT -> Expr s BOOL
+
+  ||| Matches the given text expression against the given
+  ||| text pattern.
+  LIKE              : Expr s TEXT -> (pattern : Expr s TEXT) -> Expr s BOOL
+
+  ||| Matches the given text expression against the given
+  ||| GLOB pattern.
+  GLOB              : Expr s TEXT -> (pattern : Expr s TEXT) -> Expr s BOOL
+
+  ||| True, if the given value appears in the given list of values.
   IN                : Expr s t -> List (Expr s t) -> Expr s BOOL
-  NOT_IN            : Expr s t -> List (Expr s t) -> Expr s BOOL
+
+  ||| Returns the first non-NULL value in the given list of expressions.
+  Coalesce          : List (Expr s t) -> Expr s t
+
+  ||| Counts the number of aggregated values.
+  |||
+  ||| This is typically used with a `GROUP BY` statement.
+  Count             : Expr s t -> Expr s INTEGER
+
+  ||| Returns the average of accumulated values.
+  |||
+  ||| This is typically used with a `GROUP BY` statement.
+  Avg               : (0 prf : Numeric t) => Expr s t -> Expr s REAL
+
+  ||| Returns the sum of accumulated values.
+  |||
+  ||| This is typically used with a `GROUP BY` statement.
+  Sum               : (0 prf : Numeric t) => Expr s t -> Expr s t
+
+  ||| Returns the minimum of accumulated values.
+  |||
+  ||| This is typically used with a `GROUP BY` statement.
+  Min               : Expr s t -> Expr s t
+
+  ||| Returns the maximum of accumulated values.
+  |||
+  ||| This is typically used with a `GROUP BY` statement.
+  Max               : Expr s t -> Expr s t
+
+  ||| Concatenates aggregated text values using the given separator.
+  |||
+  ||| This is typically used with a `GROUP BY` statement.
+  GroupConcat       : Expr s TEXT -> (sep : String) -> Expr s TEXT
 
 export %inline
 Num (Expr s INTEGER) where
   fromInteger = Lit INTEGER . fromInteger
-  (+) = AddI
-  (*) = MultI
+  (+) = Add
+  (*) = Mult
 
 export %inline
 Neg (Expr s INTEGER) where
-  negate = NegI
-  (-)    = SubI
+  negate = Neg
+  (-)    = Sub
 
 export %inline
 Integral (Expr s INTEGER) where
-  div = DivI
+  div = Div
   mod = Mod
 
 export %inline
 Num (Expr s REAL) where
   fromInteger = Lit REAL . fromInteger
-  (+) = AddD
-  (*) = MultD
+  (+) = Add
+  (*) = Mult
 
 export %inline
 Neg (Expr s REAL) where
-  negate = NegD
-  (-)    = SubD
+  negate = Neg
+  (-)    = Sub
 
 export %inline
 Fractional (Expr s REAL) where
-  (/) = DivD
+  (/) = Div
 
 export %inline
 FromDouble (Expr s REAL) where
@@ -137,6 +303,8 @@ real = val
 -- Encode
 --------------------------------------------------------------------------------
 
+||| Converts a list of values to strings and concatenates them using
+||| a comma as the separator.
 export
 commaSep : (a -> String) -> List a -> String
 commaSep f = concat . intersperse ", " . map f
@@ -208,6 +376,10 @@ encPrefix : String -> Expr s t -> String
 
 encExprs : SnocList String -> List (Expr s t) -> String
 
+encFun1 : String -> Expr s t -> String
+
+encFun : String -> List (Expr s t) -> String
+
 ||| Encodes an expression as a string.
 |||
 ||| Literals will be correctly escaped and converted.
@@ -218,15 +390,12 @@ encExprs : SnocList String -> List (Expr s t) -> String
 export
 encodeExpr : Expr s t -> String
 encodeExpr (Lit t v)    = encodeLit t v
-encodeExpr (AddI x y)   = encOp "+" x y
-encodeExpr (MultI x y)  = encOp "*" x y
-encodeExpr (SubI x y)   = encOp "-" x y
-encodeExpr (DivI x y)   = encOp "/" x y
+encodeExpr (Add x y)    = encOp "+" x y
+encodeExpr (Mult x y)   = encOp "*" x y
+encodeExpr (Sub x y)    = encOp "-" x y
+encodeExpr (Div x y)    = encOp "/" x y
 encodeExpr (Mod x y)    = encOp "%" x y
-encodeExpr (AddD x y)   = encOp "+" x y
-encodeExpr (MultD x y)  = encOp "*" x y
-encodeExpr (SubD x y)   = encOp "-" x y
-encodeExpr (DivD x y)   = encOp "/" x y
+encodeExpr (Abs y)      = encFun1 "abs" y
 encodeExpr (x < y)      = encOp "<" x y
 encodeExpr (x > y)      = encOp ">" x y
 encodeExpr (x <= y)     = encOp "<=" x y
@@ -243,8 +412,7 @@ encodeExpr (x .|. y)    = encOp "|" x y
 encodeExpr (ShiftR x y) = encOp ">>" x y
 encodeExpr (ShiftL x y) = encOp "<<" x y
 encodeExpr (NOT x)      = encPrefix "NOT" x
-encodeExpr (NegI x)     = encPrefix "-" x
-encodeExpr (NegD x)     = encPrefix "-" x
+encodeExpr (Neg x)      = encPrefix "-" x
 encodeExpr (Raw s)      = s
 encodeExpr (C c)        = c
 encodeExpr NULL         = "NULL"
@@ -254,11 +422,15 @@ encodeExpr CURRENT_TIME      = "CURRENT_TIME"
 encodeExpr CURRENT_DATE      = "CURRENT_DATE"
 encodeExpr CURRENT_TIMESTAMP = "CURRENT_TIMESTAMP"
 encodeExpr (LIKE x y)        = encOp "LIKE" x y
-encodeExpr (NOT_LIKE x y)    = encOp "NOT_LIKE" x y
 encodeExpr (GLOB x y)        = encOp "GLOB" x y
-encodeExpr (NOT_GLOB x y)    = encOp "NOT_GLOB" x y
 encodeExpr (IN x xs)         = "\{encodeExpr x} IN (\{encExprs [<] xs})"
-encodeExpr (NOT_IN x xs)     = "\{encodeExpr x} NOT IN (\{encExprs [<] xs})"
+encodeExpr (Coalesce xs)     = encFun "coalesce" xs
+encodeExpr (Count x)         = encFun1 "count" x
+encodeExpr (Avg x)           = encFun1 "avg" x
+encodeExpr (Sum x)           = encFun1 "sum" x
+encodeExpr (Min x)           = encFun1 "min" x
+encodeExpr (Max x)           = encFun1 "max" x
+encodeExpr (GroupConcat x s) = "group_concat(\{encodeExpr x}, \{s})"
 
 encOp s x y =
   let sx := encodeExpr x
@@ -269,3 +441,7 @@ encPrefix s x = "\{s}(\{encodeExpr x})"
 
 encExprs sc []      = commaSep id (sc <>> [])
 encExprs sc (x::xs) = encExprs (sc :< encodeExpr x) xs
+
+encFun f xs      = "\{f}(\{encExprs [<] xs})"
+
+encFun1 f x      = "\{f}(\{encodeExpr x})"

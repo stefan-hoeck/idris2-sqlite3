@@ -191,8 +191,8 @@ public export
 data Query : Type -> Type where
   SELECT :
        {auto as : AsRow t}
-    -> (from    : From s)
     -> (xs      : LAll (Expr s) (RowTypes t))
+    -> (from    : From s)
     -> (where_  : Expr s BOOL)
     -> Query t
 

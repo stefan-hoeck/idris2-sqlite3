@@ -264,8 +264,8 @@ encodeFrom (x :< y) = do
 ||| inserted as placeholders for literal values where appropriate.
 export
 encodeQuery : Query ts -> ParamStmt
-encodeQuery (SELECT from vs where_) = do
-  fstr <- encodeFrom from
+encodeQuery (SELECT vs from where_) = do
   vstr <- exprs [<] vs
+  fstr <- encodeFrom from
   wh   <- encodeExprP where_
   pure "SELECT \{vstr} \{fstr} WHERE \{wh}"

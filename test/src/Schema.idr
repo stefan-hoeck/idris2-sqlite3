@@ -170,49 +170,51 @@ insertFile = insert Files ["content"]
 export
 mol : Expr [<Molecules] BOOL -> Query (Item Molecule)
 mol =
-  SELECT [<FROM Molecules] ["molecule_id", "name", "casnr", "molweight", "type"]
+  SELECT
+    ["molecule_id", "name", "casnr", "molweight", "type"]
+    [<FROM Molecules]
 
 export
 file : Expr [<Files] BOOL -> Query (Item File)
-file = SELECT [<FROM Files] ["file_id", "content"]
+file = SELECT ["file_id", "content"] [<FROM Files]
 
 export
 employee : Query (Item $ Employee String)
 employee =
   SELECT
+    ["e.employee_id", "e.name", "e.salary", "u.name"]
     [< FROM (Employees `AS` "e")
     ,  JOIN (Units `AS` "u") `USING` ["unit_id"]
     ]
-    ["e.employee_id", "e.name", "e.salary", "u.name"]
     ("e.salary" > 3000.0)
 
 export
 heads : Query (OrgUnit String)
 heads =
   SELECT
+    ["u.name", "e.name"]
     [< FROM $ Employees `AS` "e"
     ,  JOIN (Units `AS` "u") `ON` ("e.employee_id" == "u.head")
     ]
-    ["u.name", "e.name"]
     TRUE
 
 export
 nonHeads : LQuery [Bits32, String]
 nonHeads =
   SELECT
+    ["e.employee_id", "e.name"]
     [< FROM $ Employees `AS` "e"
     ,  OUTER_JOIN (Units `AS` "u") `ON` ("e.employee_id" == "u.head")
     ]
-    ["e.employee_id", "e.name"]
     (IS NULL "u.head")
 
 export
 tuples : LQuery [String,Double,Double,MolType]
 tuples =
   SELECT
+    ["e.name", "m1.molweight", "m2.molweight", "m1.type"]
     [< FROM $ Employees `AS` "e"
     ,  CROSS_JOIN $ Molecules `AS` "m1"
     ,  CROSS_JOIN $ Molecules `AS` "m2"
     ]
-    ["e.name", "m1.molweight", "m2.molweight", "m1.type"]
     ("m1.molweight" < "m2.molweight")

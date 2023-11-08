@@ -217,6 +217,7 @@ record Query (t : Type) where
   from        : From schema
   columns     : LAll (Expr schema) (RowTypes t)
   where_      : Expr schema BOOL
+  having      : Expr schema BOOL
   group_by    : List (OrderingTerm schema)
   order_by    : List (OrderingTerm schema)
   limit       : Maybe Nat
@@ -230,11 +231,11 @@ public export
 0 LQuery : List Type -> Type
 LQuery = Query . HList
 
-infixl 7 `GROUP_BY`,`ORDER_BY`,`WHERE`, `LIMIT`, `OFFSET`
+infixl 7 `GROUP_BY`,`ORDER_BY`,`WHERE`, `LIMIT`, `OFFSET`, `HAVING`
 
 public export %inline
 SELECT : {s : _} -> AsRow t => LAll (Expr s) (RowTypes t) -> From s -> Query t
-SELECT xs from = Q s from xs TRUE [] [] Nothing 0
+SELECT xs from = Q s from xs TRUE TRUE [] [] Nothing 0
 
 public export %inline
 GROUP_BY : (q : Query t) -> List (OrderingTerm q.schema) -> Query t
@@ -243,6 +244,10 @@ GROUP_BY q os = {group_by := os} q
 public export %inline
 WHERE : (q : Query t) -> Expr q.schema BOOL -> Query t
 WHERE q p = {where_ := p} q
+
+public export %inline
+HAVING : (q : Query t) -> Expr q.schema BOOL -> Query t
+HAVING q p = {having := p} q
 
 public export %inline
 ORDER_BY : (q : Query t) -> List (OrderingTerm q.schema) -> Query t

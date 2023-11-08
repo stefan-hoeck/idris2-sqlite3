@@ -199,6 +199,8 @@ unitStats =
     ,  JOIN (Units `AS` "u") `USING` ["unit_id"]
     ]
     `GROUP_BY` [O "e.unit_id" None NoAsc]
+    `HAVING`   (Count "e.name" > 3)
+    `ORDER_BY` [O (Avg "e.salary") None ASC]
 
 export
 heads : Query (OrgUnit String)

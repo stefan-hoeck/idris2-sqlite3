@@ -51,6 +51,9 @@ app = withDB ":memory:" $ do
     , insertEmployee $ E "Benny" 3100.0 2
     , insertEmployee $ E "Rob" 3100.0 3
     , insertEmployee $ E "Zelda" 3100.0 3
+    , insertEmployee $ E "Gundi" 2050.0 1
+    , insertEmployee $ E "Valeri" 5010.0 1
+    , insertEmployee $ E "Ronja" 4010.0 1
     ] ++ fromList (insertFile . file <$> [0..255])
   ms <- query (mol TRUE) 1000
   traverse_ printLn ms

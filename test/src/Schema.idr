@@ -169,14 +169,16 @@ insertFile = insert Files ["content"]
 
 export
 mol : Expr [<Molecules] BOOL -> Query (Item Molecule)
-mol =
+mol x =
   SELECT
     ["molecule_id", "name", "casnr", "molweight", "type"]
     [<FROM Molecules]
+    x
+    []
 
 export
 file : Expr [<Files] BOOL -> Query (Item File)
-file = SELECT ["file_id", "content"] [<FROM Files]
+file x = SELECT ["file_id", "content"] [<FROM Files] x []
 
 export
 employee : Query (Item $ Employee String)
@@ -187,6 +189,7 @@ employee =
     ,  JOIN (Units `AS` "u") `USING` ["unit_id"]
     ]
     ("e.salary" > 3000.0)
+    [O "e.salary" None ASC, O "e.name" NOCASE ASC]
 
 export
 heads : Query (OrgUnit String)
@@ -197,6 +200,7 @@ heads =
     ,  JOIN (Units `AS` "u") `ON` ("e.employee_id" == "u.head")
     ]
     TRUE
+    []
 
 export
 nonHeads : LQuery [Bits32, String]
@@ -207,6 +211,7 @@ nonHeads =
     ,  OUTER_JOIN (Units `AS` "u") `ON` ("e.employee_id" == "u.head")
     ]
     (IS NULL "u.head")
+    [O "e.name" None ASC]
 
 export
 tuples : LQuery [String,Double,Double,MolType]
@@ -218,3 +223,4 @@ tuples =
     ,  CROSS_JOIN $ Molecules `AS` "m2"
     ]
     ("m1.molweight" < "m2.molweight")
+    []

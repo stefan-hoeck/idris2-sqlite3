@@ -53,6 +53,10 @@ encPrefix : String -> Expr s t -> ParamStmt
 
 encExprs : SnocList String -> List (Expr s t) -> ParamStmt
 
+encFun1 : String -> Expr s t -> ParamStmt
+
+encFun : String -> List (Expr s t) -> ParamStmt
+
 ||| Encodes an expression, generating a list of parameters with
 ||| unique names that will be bound when running the SQL statement.
 export
@@ -62,15 +66,12 @@ encodeExprP (Lit t v)    =
     let s := ":\{show x}"
      in (PS (S x) (P s t v :: as), s)
 
-encodeExprP (AddI x y)   = encOp "+" x y
-encodeExprP (MultI x y)  = encOp "*" x y
-encodeExprP (SubI x y)   = encOp "-" x y
-encodeExprP (DivI x y)   = encOp "/" x y
+encodeExprP (Add x y)    = encOp "+" x y
+encodeExprP (Mult x y)   = encOp "*" x y
+encodeExprP (Sub x y)    = encOp "-" x y
+encodeExprP (Div x y)    = encOp "/" x y
 encodeExprP (Mod x y)    = encOp "%" x y
-encodeExprP (AddD x y)   = encOp "+" x y
-encodeExprP (MultD x y)  = encOp "*" x y
-encodeExprP (SubD x y)   = encOp "-" x y
-encodeExprP (DivD x y)   = encOp "/" x y
+encodeExprP (Abs y)       = encFun1 "abs" y
 encodeExprP (x < y)      = encOp "<" x y
 encodeExprP (x > y)      = encOp ">" x y
 encodeExprP (x <= y)     = encOp "<=" x y
@@ -86,32 +87,33 @@ encodeExprP (x .&. y)    = encOp "&" x y
 encodeExprP (x .|. y)    = encOp "|" x y
 encodeExprP (ShiftR x y) = encOp ">>" x y
 encodeExprP (ShiftL x y) = encOp "<<" x y
-encodeExprP (NegI x)     = encPrefix "-" x
-encodeExprP (NegD x)     = encPrefix "-" x
+encodeExprP (Neg x)      = encPrefix "-" x
 encodeExprP (NOT x)      = encPrefix "NOT" x
 encodeExprP (Raw s)      = pure s
 encodeExprP NULL         = pure "NULL"
 encodeExprP TRUE         = pure "1"
 encodeExprP FALSE        = pure "0"
 encodeExprP (C c)        = pure c
+encodeExprP (Coalesce xs)     = encFun "coalesce" xs
+encodeExprP (Count x)         = encFun1 "count" x
+encodeExprP (Avg x)           = encFun1 "avg" x
+encodeExprP (Sum x)           = encFun1 "sum" x
+encodeExprP (Min x)           = encFun1 "min" x
+encodeExprP (Max x)           = encFun1 "max" x
+encodeExprP (GroupConcat x s) = do
+  ex <- encodeExprP x
+  pure "group_concat(\{ex}, \{s})"
 
 encodeExprP CURRENT_TIME      = pure "CURRENT_TIME"
 encodeExprP CURRENT_DATE      = pure "CURRENT_DATE"
 encodeExprP CURRENT_TIMESTAMP = pure "CURRENT_TIMESTAMP"
 encodeExprP (LIKE x y)        = encOp "LIKE" x y
-encodeExprP (NOT_LIKE x y)    = encOp "NOT_LIKE" x y
 encodeExprP (GLOB x y)        = encOp "GLOB" x y
-encodeExprP (NOT_GLOB x y)    = encOp "NOT_GLOB" x y
 
 encodeExprP (IN x xs) = do
   s  <- encodeExprP x
   ss <- encExprs [<] xs
   pure "(\{s}) IN (\{ss})"
-
-encodeExprP (NOT_IN x xs) = do
-  s  <- encodeExprP x
-  ss <- encExprs [<] xs
-  pure "(\{s}) NOT IN (\{ss})"
 
 encOp s x y = do
   sx <- encodeExprP x
@@ -126,6 +128,14 @@ encExprs sc []      = pure . commaSep id $ sc <>> []
 encExprs sc (x::xs) = do
   v <- encodeExprP x
   encExprs (sc :< v) xs
+
+encFun f xs      = do
+  exs <- encExprs [<] xs
+  pure "\{f}(\{exs})"
+
+encFun1 f x      = do
+  ex <- encodeExprP x
+  pure "\{f}(\{ex})"
 
 --------------------------------------------------------------------------------
 -- Encoding Commands
@@ -259,8 +269,9 @@ encodeFrom (x :< y) = do
   pure "\{ef} \{ej}"
 
 asc : AscDesc -> String
-asc ASC  = "ASC"
-asc DESC = "DESC"
+asc NoAsc = ""
+asc ASC   = "ASC"
+asc DESC  = "DESC"
 
 collate : Collation t -> String
 collate None   = ""
@@ -271,15 +282,17 @@ encodeOrderingTerm (O expr coll a) = do
   ex <- encodeExprP expr
   pure "\{ex} \{collate coll} \{asc a}"
 
-encodeOrd : List (OrderingTerm t) -> ParamStmt
-encodeOrd [] = pure ""
-encodeOrd xs = go [<] xs
-  where
-    go : SnocList String -> List (OrderingTerm t) -> ParamStmt
-    go ss []      = pure $ "ORDER BY \{commaSep id (ss <>> [])}"
-    go ss (x::xs) = do
-      s <- encodeOrderingTerm x
-      go (ss :< s) xs
+ots : SnocList String -> List (OrderingTerm t) -> ParamStmt
+ots ss []      = pure $ commaSep id (ss <>> [])
+ots ss (x::xs) = do
+  s <- encodeOrderingTerm x
+  ots (ss :< s) xs
+
+encodeOrd : String -> List (OrderingTerm t) -> ParamStmt
+encodeOrd s [] = pure ""
+encodeOrd s xs = do
+  str <- ots [<] xs
+  pure "\{s} \{str}"
 
 
 ||| Encodes an SQLite `SELECT` statement.
@@ -288,9 +301,10 @@ encodeOrd xs = go [<] xs
 ||| inserted as placeholders for literal values where appropriate.
 export
 encodeQuery : Query ts -> ParamStmt
-encodeQuery (SELECT vs from where_ order_by) = do
+encodeQuery (SELECT vs from where_ group_by order_by) = do
   vstr <- exprs [<] vs
   fstr <- encodeFrom from
   wh   <- encodeExprP where_
-  ord  <- encodeOrd order_by
-  pure "SELECT \{vstr} \{fstr} WHERE \{wh} \{ord}"
+  grp  <- encodeOrd "GROUP BY" group_by
+  ord  <- encodeOrd "ORDER BY" order_by
+  pure "SELECT \{vstr} \{fstr} WHERE \{wh} \{grp} \{ord}"

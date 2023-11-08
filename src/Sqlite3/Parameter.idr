@@ -294,6 +294,10 @@ encodeOrd s xs = do
   str <- ots [<] xs
   pure "\{s} \{str}"
 
+limit : Maybe Nat -> Nat -> String
+limit Nothing  0 = ""
+limit (Just n) 0 = "LIMIT \{show n}"
+limit x n = let lim := maybe "-1" show x in "LIMIT \{lim} OFFSET \{show n}"
 
 ||| Encodes an SQLite `SELECT` statement.
 |||
@@ -301,10 +305,10 @@ encodeOrd s xs = do
 ||| inserted as placeholders for literal values where appropriate.
 export
 encodeQuery : Query ts -> ParamStmt
-encodeQuery (Q _ from vs where_ group_by order_by) = do
+encodeQuery (Q _ from vs where_ group_by order_by lim off) = do
   vstr <- exprs [<] vs
   fstr <- encodeFrom from
   wh   <- encodeExprP where_
   grp  <- encodeOrd "GROUP BY" group_by
   ord  <- encodeOrd "ORDER BY" order_by
-  pure "SELECT \{vstr} \{fstr} WHERE \{wh} \{grp} \{ord}"
+  pure "SELECT \{vstr} \{fstr} WHERE \{wh} \{grp} \{ord} \{limit lim off}"

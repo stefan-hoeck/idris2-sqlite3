@@ -230,3 +230,4 @@ tuples =
     ,  CROSS_JOIN $ Molecules `AS` "m2"
     ]
     `WHERE` ("m1.molweight" < "m2.molweight")
+    `OFFSET` 2

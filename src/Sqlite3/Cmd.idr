@@ -219,6 +219,8 @@ record Query (t : Type) where
   where_      : Expr schema BOOL
   group_by    : List (OrderingTerm schema)
   order_by    : List (OrderingTerm schema)
+  limit       : Maybe Nat
+  offset      : Nat
 
 public export %inline %hint
 queryAsRow : (q : Query t) => AsRow t
@@ -228,11 +230,11 @@ public export
 0 LQuery : List Type -> Type
 LQuery = Query . HList
 
-infixl 7 `GROUP_BY`,`ORDER_BY`,`WHERE`
+infixl 7 `GROUP_BY`,`ORDER_BY`,`WHERE`, `LIMIT`, `OFFSET`
 
 public export %inline
 SELECT : {s : _} -> AsRow t => LAll (Expr s) (RowTypes t) -> From s -> Query t
-SELECT xs from = Q s from xs TRUE [] []
+SELECT xs from = Q s from xs TRUE [] [] Nothing 0
 
 public export %inline
 GROUP_BY : (q : Query t) -> List (OrderingTerm q.schema) -> Query t
@@ -245,3 +247,11 @@ WHERE q p = {where_ := p} q
 public export %inline
 ORDER_BY : (q : Query t) -> List (OrderingTerm q.schema) -> Query t
 ORDER_BY q os = {order_by := os} q
+
+public export %inline
+LIMIT : (q : Query t) -> Nat -> Query t
+LIMIT q n = {limit := Just n} q
+
+public export %inline
+OFFSET : (q : Query t) -> Nat -> Query t
+OFFSET q n = {offset := n} q

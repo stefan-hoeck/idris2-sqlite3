@@ -54,7 +54,7 @@ app = withDB ":memory:" $ do
     ] ++ fromList (insertFile . file <$> [0..255])
   ms <- query (mol TRUE) 1000
   traverse_ printLn ms
-  fs <- query (file TRUE) 1000
+  fs <- query (file TRUE `LIMIT` 20) 1000
   traverse_ (putStrLn . encodeBytes . content . item) fs
   es <- query employee 1000
   traverse_ printLn es

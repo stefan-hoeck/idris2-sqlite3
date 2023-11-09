@@ -194,13 +194,18 @@ export
 unitStats : LQuery [String,Bits32,Double,Double,Double]
 unitStats =
   SELECT
-    ["u.name", Count "e.name", Avg "e.salary", Min "e.salary", Max "e.salary"]
+    [ "u.name"
+    ,  Count "e.name" `AS` "num_employees"
+    ,  Avg "e.salary" `AS` "average_salary"
+    ,  Min "e.salary" `AS` "min_salary"
+    ,  Max "e.salary" `AS` "max_salary"
+    ]
     [< FROM (Employees `AS` "e")
     ,  JOIN (Units `AS` "u") `USING` ["unit_id"]
     ]
-    `GROUP_BY` [O "e.unit_id" None NoAsc]
-    `HAVING`   (Count "e.name" > 3)
-    `ORDER_BY` [O (Avg "e.salary") None ASC]
+    `GROUP_BY` [G "e.unit_id" None]
+    `HAVING`   ("num_employees" > 3)
+    `ORDER_BY` [O "average_salary" None ASC]
 
 export
 heads : Query (OrgUnit String)

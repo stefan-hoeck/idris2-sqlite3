@@ -111,6 +111,12 @@ FindSchemaCol2 t c [<]       = Nothing
 FindSchemaCol2 t c (sx :< x) =
   if x.as == t then FindCol c x.cols else FindSchemaCol2 t c sx
 
+public export
+FindSchemaCol1 : String -> Schema -> Maybe SqliteType
+FindSchemaCol1 n [< t]           = FindCol n t.cols
+FindSchemaCol1 n (_:<T "" "" cs) = FindCol n cs
+FindSchemaCol1 n _               = Nothing
+
 ||| Looks up a table and column name in a schema.
 |||
 ||| In case the schema has only one table, a column can be
@@ -118,13 +124,9 @@ FindSchemaCol2 t c (sx :< x) =
 ||| prefixed by the table name separated by a dot.
 public export
 FindSchemaCol : String -> Schema -> Maybe SqliteType
-FindSchemaCol str [<tbl] =
-  case split ('.' ==) str of
-    n:::[]  => FindCol n tbl.cols
-    t:::[n] => FindSchemaCol2 t n [<tbl]
-    _       => Nothing
 FindSchemaCol str s =
   case split ('.' ==) str of
+    n:::[]  => FindSchemaCol1 n s
     t:::[n] => FindSchemaCol2 t n s
     _       => Nothing
 

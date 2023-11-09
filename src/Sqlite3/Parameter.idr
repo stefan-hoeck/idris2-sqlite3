@@ -204,6 +204,13 @@ exprs sc (c::cs) = do
   s <- encodeExprP c
   exprs (sc :< s) cs
 
+namedExprs : SnocList String -> LAll (NamedExpr s) ts -> ParamStmt
+namedExprs sc []      = pure $ commaSep id (sc <>> [])
+namedExprs sc (AS c n::cs) = do
+  s <- encodeExprP c
+  let s2 := if n == "" then s else "\{s} AS \{n}"
+  namedExprs (sc :< s2) cs
+
 updateVals : SnocList String -> List (Val t) -> ParamStmt
 updateVals sc []        = pure $ commaSep id (sc <>> [])
 updateVals sc (x :: xs) = do
@@ -312,10 +319,10 @@ encodeHaving x    = do
 export
 encodeQuery : Query ts -> ParamStmt
 encodeQuery (Q _ from vs where_ having group_by order_by lim off) = do
-  vstr <- exprs [<] vs
+  vstr <- namedExprs [<] vs
   fstr <- encodeFrom from
   wh   <- encodeExprP where_
   hav  <- encodeHaving having
-  grp  <- encodeOrd "GROUP BY" group_by
+  grp  <- encodeOrd "GROUP BY" (map ord group_by)
   ord  <- encodeOrd "ORDER BY" order_by
   pure "SELECT \{vstr} \{fstr} WHERE \{wh} \{grp} \{hav} \{ord} \{limit lim off}"

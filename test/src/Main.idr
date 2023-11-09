@@ -4,6 +4,7 @@ import Control.RIO.Sqlite3
 import Data.Buffer.Indexed
 import Data.ByteString
 import Data.List.Quantifiers
+import Data.WithID
 import Enum
 import Schema
 
@@ -58,7 +59,7 @@ app = withDB ":memory:" $ do
   ms <- query (mol TRUE) 1000
   traverse_ printLn ms
   fs <- query (file TRUE `LIMIT` 20) 1000
-  traverse_ (putStrLn . encodeBytes . content . item) fs
+  traverse_ (putStrLn . encodeBytes . content . value) fs
   es <- query employee 1000
   traverse_ printLn es
   hs <- query heads 1000

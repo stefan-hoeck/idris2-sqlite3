@@ -1,0 +1,9 @@
+package sqlite3-docs
+version      = 0.0.1
+authors      = "stefan-hoeck"
+
+depends = sqlite3-rio
+
+sourcedir = "src"
+
+modules = README

@@ -37,3 +37,5 @@ jobs:
         run: pack --no-prompt test sqlite3
       - name: Build sqlite3-rio
         run: pack --no-prompt install sqlite3-rio
+      - name: Typecheck docs
+        run: pack --no-prompt typecheck sqlite3-docs

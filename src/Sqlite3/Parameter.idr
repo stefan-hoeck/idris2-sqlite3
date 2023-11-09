@@ -277,8 +277,8 @@ encodeFrom (x :< y) = do
 
 asc : AscDesc -> String
 asc NoAsc = ""
-asc ASC   = "ASC"
-asc DESC  = "DESC"
+asc Asc   = "Asc"
+asc Desc  = "Desc"
 
 collate : Collation t -> String
 collate None   = ""

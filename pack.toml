@@ -9,8 +9,7 @@ type   = "local"
 path   = "sqlite3-rio"
 ipkg   = "sqlite3-rio.ipkg"
 
-[custom.all.bytestring]
-type   = "git"
-url    = "https://github.com/stefan-hoeck/idris2-bytestring"
-commit = "latest:main"
-ipkg   = "bytestring.ipkg"
+[custom.all.sqlite3-docs]
+type   = "local"
+path   = "docs"
+ipkg   = "docs.ipkg"

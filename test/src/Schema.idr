@@ -1,5 +1,6 @@
 module Schema
 
+import Data.WithID
 import Data.Buffer.Indexed
 import Data.ByteString
 import Data.List.Quantifiers
@@ -129,20 +130,6 @@ record File where
 
 %runElab derive "File" [Show, Eq, AsRow]
 
-public export
-record Item (i : Type) where
-  constructor I
-  id   : Bits32
-  item : i
-
-%runElab derive "Schema.Item" [Show, Eq]
-
-public export
-AsRow i => AsRow (Item i) where
-  rowTypes = INTEGER :: RowTypes i
-  toRow (I id itm) = toCell id :: toRow itm
-  fromRow (id::t)  = [| I (fromCell id) (fromRow t) |]
-
 --------------------------------------------------------------------------------
 -- Create
 --------------------------------------------------------------------------------
@@ -168,7 +155,7 @@ insertFile = insert Files ["content"]
 --------------------------------------------------------------------------------
 
 export
-mol : Expr [<Molecules] BOOL -> Query (Item Molecule)
+mol : Expr [<Molecules] BOOL -> Query (WithID Molecule)
 mol x =
   SELECT
     ["molecule_id", "name", "casnr", "molweight", "type"]
@@ -176,11 +163,11 @@ mol x =
   `WHERE` x
 
 export
-file : Expr [<Files] BOOL -> Query (Item File)
+file : Expr [<Files] BOOL -> Query (WithID File)
 file x = SELECT ["file_id", "content"] [<FROM Files] `WHERE` x
 
 export
-employee : Query (Item $ Employee String)
+employee : Query (WithID $ Employee String)
 employee =
   SELECT
     ["e.employee_id", "e.name", "e.salary", "u.name"]
@@ -188,7 +175,7 @@ employee =
     ,  JOIN (Units `AS` "u") `USING` ["unit_id"]
     ]
   `WHERE`    ("e.salary" > 3000.0)
-  `ORDER_BY` [O "e.salary" None ASC, O "e.name" NOCASE ASC]
+  `ORDER_BY` [ASC "e.salary", ASC "e.name"]
 
 export
 unitStats : LQuery [String,Bits32,Double,Double,Double]
@@ -203,9 +190,9 @@ unitStats =
     [< FROM (Employees `AS` "e")
     ,  JOIN (Units `AS` "u") `USING` ["unit_id"]
     ]
-    `GROUP_BY` [G "e.unit_id" None]
+    `GROUP_BY` ["e.unit_id"]
     `HAVING`   ("num_employees" > 3)
-    `ORDER_BY` [O "average_salary" None ASC]
+    `ORDER_BY` [ASC "average_salary"]
 
 export
 heads : Query (OrgUnit String)
@@ -225,7 +212,7 @@ nonHeads =
     ,  OUTER_JOIN (Units `AS` "u") `ON` ("e.employee_id" == "u.head")
     ]
     `WHERE`    IS NULL "u.head"
-    `ORDER_BY` [O "e.name" None ASC]
+    `ORDER_BY` [ASC "e.name"]
 
 export
 tuples : LQuery [String,Double,Double,MolType]

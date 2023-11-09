@@ -189,7 +189,7 @@ data From : (s : Schema) -> Type where
 ||| Tag indicating, whether results should be sorted in ascending
 ||| or descending order.
 public export
-data AscDesc = NoAsc | ASC | DESC
+data AscDesc = NoAsc | Asc | Desc
 
 ||| Different collations used during ordering.
 |||
@@ -207,12 +207,33 @@ record OrderingTerm (s : Schema) where
   coll : Collation tpe
   asc  : AscDesc
 
+public export %inline
+ASC : Expr s t -> OrderingTerm s
+ASC x = O x None Asc
+
+public export %inline
+DESC : Expr s t -> OrderingTerm s
+DESC x = O x None Desc
+
+public export %inline
+COLLATE : (o : OrderingTerm s) -> Collation o.tpe -> OrderingTerm s
+COLLATE o c = {coll := c} o
+
 public export
 record GroupingTerm (s : Schema) where
   constructor G
   {0 tpe : SqliteType}
   expr : Expr s tpe
   coll : Collation tpe
+
+namespace GroupingTerm
+  public export %inline
+  fromString :
+       {s        : Schema}
+    -> (col      : String)
+    -> {auto 0 p : IsJust (FindSchemaCol col s)}
+    -> GroupingTerm s
+  fromString col = G (fromString col) None
 
 public export %inline
 ord : GroupingTerm s -> OrderingTerm s
@@ -224,13 +245,14 @@ record NamedExpr (s : Schema) (t : SqliteType) where
   expr : Expr s t
   name : String
 
-public export %inline
-fromString :
-     {s        : Schema}
-  -> (col      : String)
-  -> {auto 0 p : IsJust (FindSchemaCol col s)}
-  -> NamedExpr s (SchemaColType col s)
-fromString col = C col `AS` ""
+namespace NameExpr
+  public export %inline
+  fromString :
+       {s        : Schema}
+    -> (col      : String)
+    -> {auto 0 p : IsJust (FindSchemaCol col s)}
+    -> NamedExpr s (SchemaColType col s)
+  fromString col = C col `AS` ""
 
 public export
 ExprColumns : {ts : _} -> LAll (NamedExpr s) ts -> List Column

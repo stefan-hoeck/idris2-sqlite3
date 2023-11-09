@@ -11,7 +11,9 @@ depends = base >= 0.6.0
 
 sourcedir = "src"
 
-modules = Derive.Sqlite3
+modules = Data.WithID
+
+        , Derive.Sqlite3
         , Derive.Sqlite3.AsCell
         , Derive.Sqlite3.AsRow
 

@@ -207,6 +207,44 @@ record OrderingTerm (s : Schema) where
   coll : Collation tpe
   asc  : AscDesc
 
+public export
+record GroupingTerm (s : Schema) where
+  constructor G
+  {0 tpe : SqliteType}
+  expr : Expr s tpe
+  coll : Collation tpe
+
+public export %inline
+ord : GroupingTerm s -> OrderingTerm s
+ord (G x c) = O x c NoAsc
+
+public export
+record NamedExpr (s : Schema) (t : SqliteType) where
+  constructor AS
+  expr : Expr s t
+  name : String
+
+public export %inline
+fromString :
+     {s        : Schema}
+  -> (col      : String)
+  -> {auto 0 p : IsJust (FindSchemaCol col s)}
+  -> NamedExpr s (SchemaColType col s)
+fromString col = C col `AS` ""
+
+public export
+ExprColumns : {ts : _} -> LAll (NamedExpr s) ts -> List Column
+ExprColumns             []              = []
+ExprColumns             (AS _ "" :: xs) = ExprColumns xs
+ExprColumns {ts = t::_} (AS _ n  :: xs) = C n t :: ExprColumns xs
+
+public export
+ExprSchema : {s : _} -> {ts : _} -> LAll (NamedExpr s) ts -> Schema
+ExprSchema xs =
+  case ExprColumns xs of
+    [] => s
+    cs => s :< T "" "" cs
+
 ||| Different types of `SELECT` commands.
 public export
 record Query (t : Type) where
@@ -215,11 +253,11 @@ record Query (t : Type) where
   {auto asRow : AsRow t}
   schema      : Schema
   from        : From schema
-  columns     : LAll (Expr schema) (RowTypes t)
-  where_      : Expr schema BOOL
-  having      : Expr schema BOOL
-  group_by    : List (OrderingTerm schema)
-  order_by    : List (OrderingTerm schema)
+  columns     : LAll (NamedExpr schema) (RowTypes t)
+  where_      : Expr (ExprSchema columns) BOOL
+  having      : Expr (ExprSchema columns) BOOL
+  group_by    : List (GroupingTerm (ExprSchema columns))
+  order_by    : List (OrderingTerm (ExprSchema columns))
   limit       : Maybe Nat
   offset      : Nat
 
@@ -234,23 +272,23 @@ LQuery = Query . HList
 infixl 7 `GROUP_BY`,`ORDER_BY`,`WHERE`, `LIMIT`, `OFFSET`, `HAVING`
 
 public export %inline
-SELECT : {s : _} -> AsRow t => LAll (Expr s) (RowTypes t) -> From s -> Query t
+SELECT : {s : _} -> AsRow t => LAll (NamedExpr s) (RowTypes t) -> From s -> Query t
 SELECT xs from = Q s from xs TRUE TRUE [] [] Nothing 0
 
 public export %inline
-GROUP_BY : (q : Query t) -> List (OrderingTerm q.schema) -> Query t
-GROUP_BY q os = {group_by := os} q
+GROUP_BY : (q : Query t) -> List (GroupingTerm $ ExprSchema q.columns) -> Query t
+GROUP_BY q gs = {group_by := gs} q
 
 public export %inline
-WHERE : (q : Query t) -> Expr q.schema BOOL -> Query t
+WHERE : (q : Query t) -> Expr (ExprSchema q.columns) BOOL -> Query t
 WHERE q p = {where_ := p} q
 
 public export %inline
-HAVING : (q : Query t) -> Expr q.schema BOOL -> Query t
+HAVING : (q : Query t) -> Expr (ExprSchema q.columns) BOOL -> Query t
 HAVING q p = {having := p} q
 
 public export %inline
-ORDER_BY : (q : Query t) -> List (OrderingTerm q.schema) -> Query t
+ORDER_BY : (q : Query t) -> List (OrderingTerm (ExprSchema q.columns)) -> Query t
 ORDER_BY q os = {order_by := os} q
 
 public export %inline

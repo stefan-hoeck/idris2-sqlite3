@@ -97,6 +97,13 @@ createEmployees =
 --------------------------------------------------------------------------------
 
 public export
+record Salary where
+  constructor S
+  value : Double
+
+%runElab derive "Schema.Salary" [Show, Eq, Ord, FromDouble, ToCell, FromCell]
+
+public export
 record OrgUnit (h : Type) where
   constructor U
   name : String
@@ -108,7 +115,7 @@ public export
 record Employee (u : Type) where
   constructor E
   name   : String
-  salary : Double
+  salary : Salary
   unit   : u
 
 %runElab derive "Schema.Employee" [Show, Eq, ToRow, FromRow]
@@ -178,7 +185,7 @@ employee =
   `ORDER_BY` [ASC "e.salary", ASC "e.name"]
 
 export
-unitStats : LQuery [String,Bits32,Double,Double,Double]
+unitStats : LQuery [String,Bits32,Salary,Salary,Salary]
 unitStats =
   SELECT
     [ "u.name"

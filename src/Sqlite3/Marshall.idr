@@ -1,7 +1,7 @@
 module Sqlite3.Marshall
 
 import Data.Buffer.Indexed
-import Data.List.Quantifiers
+import public Data.List.Quantifiers
 import Sqlite3.Types
 
 %default total
@@ -11,21 +11,20 @@ public export
 LAll = Data.List.Quantifiers.All.All
 
 --------------------------------------------------------------------------------
--- AsCell
+-- FromCell
 --------------------------------------------------------------------------------
 
-||| Inteface for converting an Idris value from and to a single cell in
-||| a table row.
+||| Inteface for converting an Idris value to a single cell in a table row.
 public export
-interface AsCell a where
-  constructor MkAsCell
-  cellType : SqliteType
-  toCell   : a -> Maybe (IdrisType cellType)
-  fromCell : Maybe (IdrisType cellType) -> Either SqlError a
+interface FromCell a where
+  constructor MkFromCell
+  fromCellType : SqliteType
+  fromCell : Maybe (IdrisType fromCellType) -> Either SqlError a
 
+||| Utility alias for `fromCellType` with an explicit erased type argument.
 public export %inline
-CellType : (0 a : Type) -> AsCell a => SqliteType
-CellType a = cellType {a}
+FromCellType : (0 a : Type) -> FromCell a => SqliteType
+FromCellType a = fromCellType {a}
 
 export
 decodeJust :
@@ -37,117 +36,188 @@ decodeJust str f Nothing  = Left (NullPointer str)
 decodeJust str f (Just v) = f v
 
 public export %inline
-AsCell a => AsCell (Maybe a) where
-  cellType          = CellType a
-  toCell m          = m >>= toCell
+FromCell a => FromCell (Maybe a) where
+  fromCellType      = FromCellType a
   fromCell Nothing  = Right Nothing
   fromCell v        = Just <$> fromCell v
 
 public export
-AsCell Int64 where
-  cellType = INTEGER
-  toCell   = Just
-  fromCell = decodeJust "Int64" Right
+FromCell Integer where
+  fromCellType = INTEGER
+  fromCell     = decodeJust "Integer" (Right . cast)
 
 public export
-AsCell Int32 where
-  cellType = INTEGER
-  toCell   = Just . cast
-  fromCell = decodeJust "Int32" (Right . cast)
+FromCell Nat where
+  fromCellType = INTEGER
+  fromCell     = decodeJust "Nat" (Right . cast)
 
 public export
-AsCell Int16 where
-  cellType = INTEGER
-  toCell   = Just . cast
-  fromCell = decodeJust "Int16" (Right . cast)
+FromCell Int64 where
+  fromCellType = INTEGER
+  fromCell     = decodeJust "Int64" Right
 
 public export
-AsCell Int8 where
-  cellType = INTEGER
-  toCell   = Just . cast
-  fromCell = decodeJust "Int8" (Right . cast)
+FromCell Int32 where
+  fromCellType = INTEGER
+  fromCell     = decodeJust "Int32" (Right . cast)
 
 public export
-AsCell Bits64 where
-  cellType = INTEGER
-  toCell   = Just . cast
-  fromCell = decodeJust "Bits64" (Right . cast)
+FromCell Int16 where
+  fromCellType = INTEGER
+  fromCell     = decodeJust "Int16" (Right . cast)
 
 public export
-AsCell Bits32 where
-  cellType = INTEGER
-  toCell   = Just . cast
-  fromCell = decodeJust "Bits32" (Right . cast)
+FromCell Int8 where
+  fromCellType = INTEGER
+  fromCell     = decodeJust "Int8" (Right . cast)
 
 public export
-AsCell Bits16 where
-  cellType = INTEGER
-  toCell   = Just . cast
-  fromCell = decodeJust "Bits16" (Right . cast)
+FromCell Bits64 where
+  fromCellType = INTEGER
+  fromCell     = decodeJust "Bits64" (Right . cast)
 
 public export
-AsCell Bits8 where
-  cellType = INTEGER
-  toCell   = Just . cast
-  fromCell = decodeJust "Bits8" (Right . cast)
+FromCell Bits32 where
+  fromCellType = INTEGER
+  fromCell     = decodeJust "Bits32" (Right . cast)
 
 public export
-AsCell String where
-  cellType = TEXT
-  toCell   = Just
-  fromCell = decodeJust "String" Right
+FromCell Bits16 where
+  fromCellType = INTEGER
+  fromCell     = decodeJust "Bits16" (Right . cast)
 
 public export
-AsCell ByteString where
-  cellType = BLOB
-  toCell   = Just
-  fromCell = decodeJust "ByteString" Right
+FromCell Bits8 where
+  fromCellType = INTEGER
+  fromCell     = decodeJust "Bits8" (Right . cast)
 
 public export
-AsCell Double where
-  cellType = REAL
-  toCell   = Just
-  fromCell = decodeJust "Double" Right
+FromCell String where
+  fromCellType = TEXT
+  fromCell     = decodeJust "String" Right
 
 public export
-AsCell Bool where
-  cellType     = INTEGER
-  toCell True  = Just 1
-  toCell False = Just 0
+FromCell ByteString where
+  fromCellType = BLOB
+  fromCell     = decodeJust "ByteString" Right
+
+public export
+FromCell Double where
+  fromCellType = REAL
+  fromCell     = decodeJust "Double" Right
+
+public export
+FromCell Bool where
+  fromCellType = INTEGER
   fromCell     = decodeJust "Bool" (\case 0 => Right False; _ => Right True)
 
 --------------------------------------------------------------------------------
--- AsRow
+-- ToCell
 --------------------------------------------------------------------------------
 
-||| Inteface for converting an Idris value from and to a row in a
-||| table.
+||| Inteface for converting an Idris value to a single cell in a table row.
 public export
-interface AsRow a where
-  constructor MkAsRow
-  rowTypes : List SqliteType
-  toRow    : a -> LAll (Maybe . IdrisType) rowTypes
-  fromRow  : LAll (Maybe . IdrisType) rowTypes -> Either SqlError a
+interface ToCell a where
+  constructor MkToCell
+  toCellType : SqliteType
+  toCell     : a -> Maybe (IdrisType toCellType)
+
+||| Utility alias for `toCellType` with an explicit erased type argument.
+public export %inline
+ToCellType : (0 a : Type) -> ToCell a => SqliteType
+ToCellType a = toCellType {a}
 
 public export %inline
-RowTypes : (0 a : Type) -> AsRow a => List SqliteType
-RowTypes a = rowTypes {a}
+ToCell a => ToCell (Maybe a) where
+  toCellType = ToCellType a
+  toCell m   = m >>= toCell
 
 public export
-CellTypes : LAll (AsCell . f) ts -> List SqliteType
-CellTypes []        = []
-CellTypes (p :: ps) = cellType @{p} :: CellTypes ps
+ToCell Int64 where
+  toCellType = INTEGER
+  toCell     = Just
 
-toRowImpl :
-     (ps : LAll (AsCell . f) ts)
-  -> LAll f ts
-  -> LAll (Maybe . IdrisType) (CellTypes ps)
-toRowImpl []      []      = []
-toRowImpl (p::ps) (v::vs) = toCell v :: toRowImpl ps vs
+public export
+ToCell Int32 where
+  toCellType = INTEGER
+  toCell     = Just . cast
+
+public export
+ToCell Int16 where
+  toCellType = INTEGER
+  toCell     = Just . cast
+
+public export
+ToCell Int8 where
+  toCellType = INTEGER
+  toCell     = Just . cast
+
+public export
+ToCell Bits64 where
+  toCellType = INTEGER
+  toCell     = Just . cast
+
+public export
+ToCell Bits32 where
+  toCellType = INTEGER
+  toCell     = Just . cast
+
+public export
+ToCell Bits16 where
+  toCellType = INTEGER
+  toCell     = Just . cast
+
+public export
+ToCell Bits8 where
+  toCellType = INTEGER
+  toCell     = Just . cast
+
+public export
+ToCell String where
+  toCellType = TEXT
+  toCell     = Just
+
+public export
+ToCell ByteString where
+  toCellType = BLOB
+  toCell     = Just
+
+public export
+ToCell Double where
+  toCellType = REAL
+  toCell     = Just
+
+public export
+ToCell Bool where
+  toCellType   = INTEGER
+  toCell True  = Just 1
+  toCell False = Just 0
+
+--------------------------------------------------------------------------------
+-- FromRow
+--------------------------------------------------------------------------------
+
+||| Inteface for converting an Idris value from a row in a table.
+public export
+interface FromRow a where
+  constructor MkFromRow
+  fromRowTypes : List SqliteType
+  fromRow      : LAll (Maybe . IdrisType) fromRowTypes -> Either SqlError a
+
+||| Utility alias for `fromRowTypes` with an explicit erased type argument.
+public export %inline
+FromRowTypes : (0 a : Type) -> FromRow a => List SqliteType
+FromRowTypes a = fromRowTypes {a}
+
+||| Computes a list of SQLite types from a list of `FromCell` implementations.
+public export
+FromCellTypes : LAll (FromCell . f) ts -> List SqliteType
+FromCellTypes []        = []
+FromCellTypes (p :: ps) = fromCellType @{p} :: FromCellTypes ps
 
 fromRowImpl :
-     (ps : LAll (AsCell . f) ts)
-  -> LAll (Maybe . IdrisType) (CellTypes ps)
+     (ps : LAll (FromCell . f) ts)
+  -> LAll (Maybe . IdrisType) (FromCellTypes ps)
   -> Either SqlError (All f ts)
 fromRowImpl []      []      = Right []
 fromRowImpl (p::ps) (v::vs) =
@@ -156,7 +226,39 @@ fromRowImpl (p::ps) (v::vs) =
    in Right (x::xs)
 
 export
-{0 f : k -> Type} -> (ps : LAll (AsCell . f) ts) => AsRow (LAll f ts) where
-  rowTypes = CellTypes ps
-  toRow    = toRowImpl ps
-  fromRow  = fromRowImpl ps
+{0 f : k -> Type} -> (ps : LAll (FromCell . f) ts) => FromRow (LAll f ts) where
+  fromRowTypes = FromCellTypes ps
+  fromRow      = fromRowImpl ps
+
+--------------------------------------------------------------------------------
+-- ToRow
+--------------------------------------------------------------------------------
+
+||| Inteface for converting an Idris value from a row in a table.
+public export
+interface ToRow a where
+  constructor MkToRow
+  toRowTypes : List SqliteType
+  toRow      : a -> LAll (Maybe . IdrisType) toRowTypes
+
+||| Utility alias for `fromRowTypes` with an explicit erased type argument.
+public export %inline
+ToRowTypes : (0 a : Type) -> ToRow a => List SqliteType
+ToRowTypes a = toRowTypes {a}
+
+public export
+ToCellTypes : LAll (ToCell . f) ts -> List SqliteType
+ToCellTypes []        = []
+ToCellTypes (p :: ps) = toCellType @{p} :: ToCellTypes ps
+
+toRowImpl :
+     (ps : LAll (ToCell . f) ts)
+  -> LAll f ts
+  -> LAll (Maybe . IdrisType) (ToCellTypes ps)
+toRowImpl []      []      = []
+toRowImpl (p::ps) (v::vs) = toCell v :: toRowImpl ps vs
+
+export
+{0 f : k -> Type} -> (ps : LAll (ToCell . f) ts) => ToRow (LAll f ts) where
+  toRowTypes = ToCellTypes ps
+  toRow      = toRowImpl ps

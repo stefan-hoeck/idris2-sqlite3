@@ -98,7 +98,7 @@ record OrgUnit (h : Type) where
   name : String
   head : h
 
-%runElab derive "OrgUnit" [Show, Eq, AsRow]
+%runElab derive "OrgUnit" [Show, Eq, ToRow, FromRow]
 
 public export
 record Employee (u : Type) where
@@ -107,13 +107,13 @@ record Employee (u : Type) where
   salary : Double
   unit   : u
 
-%runElab derive "Employee" [Show, Eq, AsRow]
+%runElab derive "Employee" [Show, Eq, ToRow, FromRow]
 ```
 
 As you can see, we leave one value in each record type abstract. This
 will depend on what kind of information we provide or collect
-for the given field. Note also, that we derived an interface of type
-`AsRow`, which allows us to convert values of these types from and
+for the given field. Note also, that we derived interfaces of type
+`FromRow` and `ToRow, which allow us to convert values of these types from and
 to rows in a database table. Let's write the code for inserting
 values next:
 

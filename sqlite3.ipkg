@@ -14,8 +14,10 @@ sourcedir = "src"
 modules = Data.WithID
 
         , Derive.Sqlite3
-        , Derive.Sqlite3.AsCell
-        , Derive.Sqlite3.AsRow
+        , Derive.Sqlite3.FromCell
+        , Derive.Sqlite3.FromRow
+        , Derive.Sqlite3.ToCell
+        , Derive.Sqlite3.ToRow
 
         , Sqlite3
         , Sqlite3.Cmd

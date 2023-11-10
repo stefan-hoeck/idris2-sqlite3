@@ -68,13 +68,13 @@ parameters {auto has : Has SqlError es}
   ||| Prepares and executes the given SQL query and extracts up to
   ||| `n` rows of results.
   export
-  selectRows : DB => AsRow a => ParamStmt -> (n : Nat) -> App es (List a)
+  selectRows : DB => FromRow a => ParamStmt -> (n : Nat) -> App es (List a)
   selectRows st n = withBoundStmt st (injectIO $ loadRows n)
 
   ||| Prepares and executes the given SQL query and extracts the
   ||| first result.
   export
-  selectRow : DB => AsRow a => ParamStmt -> App es a
+  selectRow : DB => FromRow a => ParamStmt -> App es a
   selectRow st = do
     [v] <- selectRows st 1 | _ => throw NoMoreData
     pure v
@@ -82,7 +82,7 @@ parameters {auto has : Has SqlError es}
   ||| Prepares and executes the given SQL query and extracts the
   ||| first result (if any).
   export
-  findRow : DB => AsRow a => ParamStmt -> App es (Maybe a)
+  findRow : DB => FromRow a => ParamStmt -> App es (Maybe a)
   findRow st = do
     [v] <- selectRows st 1 | _ => pure Nothing
     pure $ Just v

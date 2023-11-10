@@ -428,7 +428,7 @@ export
 loadRows :
      {auto db : DB}
   -> {auto s  : Stmt}
-  -> {auto ps : AsRow a}
+  -> {auto ps : FromRow a}
   -> (max     : Nat)
   -> IO (Either SqlError $ List a)
 loadRows = go [<]

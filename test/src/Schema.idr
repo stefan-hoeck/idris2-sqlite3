@@ -102,7 +102,7 @@ record OrgUnit (h : Type) where
   name : String
   head : h
 
-%runElab derive "Schema.OrgUnit" [Show, Eq, AsRow]
+%runElab derive "Schema.OrgUnit" [Show, Eq, ToRow, FromRow]
 
 public export
 record Employee (u : Type) where
@@ -111,7 +111,7 @@ record Employee (u : Type) where
   salary : Double
   unit   : u
 
-%runElab derive "Schema.Employee" [Show, Eq, AsRow]
+%runElab derive "Schema.Employee" [Show, Eq, ToRow, FromRow]
 
 public export
 record Molecule where
@@ -121,14 +121,14 @@ record Molecule where
   molWeight : Maybe Double
   type      : MolType
 
-%runElab derive "Molecule" [Show, Eq, AsRow]
+%runElab derive "Molecule" [Show, Eq, ToRow, FromRow]
 
 public export
 record File where
   constructor F
   content : ByteString
 
-%runElab derive "File" [Show, Eq, AsRow]
+%runElab derive "File" [Show, Eq, ToRow, FromRow]
 
 --------------------------------------------------------------------------------
 -- Create

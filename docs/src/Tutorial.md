@@ -181,7 +181,7 @@ failing "Can't find an implementation for IsJust"
 ```
 
 I quickly implement the other commands for creating our tables,
-and the we'll have a closer look at how table and column names
+and then we'll have a closer look at how table and column names
 are resolved at compile time.
 
 ```idris
@@ -225,7 +225,7 @@ createStudentProblems =
 
 Three new things showed up in these additional table definitions:
 First, primary keys can consist of more than one column, that's
-why we provide them as a list of columns (actually, its a
+why we provide them as a list of columns (actually, it's a
 heterogeneous list of type `All (TColumn t) ts`, where `t` is
 the table we are currently working on, and `ts` is the list of
 `SqliteType`s associated with the columns). Second, the
@@ -235,7 +235,7 @@ for the first time. We will look at expressions in more detail
 below, but I can already reveal that expressions are properly
 typed and checked by Idris.
 
-## Behind the Scenes: Find Columns and their Types via String Literals
+## Behind the Scenes: Finding Columns and their Types via String Literals
 
 What we saw so far, was very basic Idris programming: We just used
 a bunch of data constructors or utilities thereof to define Idris
@@ -268,11 +268,12 @@ library: Instead of using an inductive type such as `Elem` for lists
 for proofing that a value is present in a container, we define
 a lookup function that returns a `Nothing` in case the lookup fails.
 This decision has two consequences, one good, the other rather
-restricting: First, name resolutions mainly occurs by unification
-instead of by proof search, that is, Idris will evaluate the
+restricting: First, name resolutions mainly occurs during unification
+instead of during proof search, that is, Idris will evaluate the
 result of invoking `FindCol` with the current arguments, and
-it will then check, whether the result is a `Just`. This is
-both faster than inductive proof search, and it is not restricted
+it will then run a very simple proof search to check
+whether the result is a `Just` or not. This is
+both faster than inductive proof search and it is not restricted
 by the default proof search limit: We can lookup names in very
 large lists of columns.
 
@@ -336,7 +337,7 @@ pointsPositive = "points" > 0
 
 A lot is going on here: The `(>)` operator is one of the data
 constructors of `Sqlite3.Expr.Expr`, which is indexed by
-a schema (a snoclist) of tables and the expressions SQLite type.
+a schema (a snoclist) of tables and the expression's SQLite type.
 They types of the expressions on both sides of `(>)` must be identical,
 so Idris must have a way of figuring out what to do with the
 integer literal on the right. Luckily, the string literal `"points"`
@@ -349,12 +350,13 @@ on the right.
 
 It is paramount that all of the above works smoothly
 in order to get nice and concise syntax when defining SQL expressions
-and commands. The good new is, that not a lot of complexity
+and commands. The good new is that not a lot of complexity
 is involved here: Understanding how `fromString` works for
-`TColumn` as well as `Expr` - and both are implemented with
-the same techniques - makes everything else fall into place.
-This is a tremendous improvement over languages such as Haskell,
-where a lot of typeclass magic I still don't fully understand is
+`TColumn` as well as `Expr` - and both are implemented via
+the same technique - makes everything else fall into place.
+This is a tremendous improvement (my personal opinion)
+over languages such as Haskell, where a lot of type class
+magic I still don't fully understand is
 necessary to achieve similar results.
 
 ### Resolving qualified Column Names in a Schema

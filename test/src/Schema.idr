@@ -51,45 +51,45 @@ Files =
 export
 createMolecules : Cmd TCreate
 createMolecules =
-  createTable Molecules
-    [ PrimaryKey ["molecule_id"]
-    , AutoIncrement "molecule_id"
-    , NotNull "name"
-    , NotNull "type"
-    , Unique ["name"]
+  CREATE_TABLE Molecules
+    [ PRIMARY_KEY ["molecule_id"]
+    , AUTOINCREMENT "molecule_id"
+    , NOT_NULL "name"
+    , NOT_NULL "type"
+    , UNIQUE ["name"]
     ]
 
 export
 createFiles : Cmd TCreate
 createFiles =
-  createTable Files
-    [ PrimaryKey ["file_id"]
-    , AutoIncrement "file_id"
-    , NotNull "content"
+  CREATE_TABLE Files
+    [ PRIMARY_KEY ["file_id"]
+    , AUTOINCREMENT "file_id"
+    , NOT_NULL "content"
     ]
 
 export
 createUnits : Cmd TCreate
 createUnits =
-  createTable Units
-    [ PrimaryKey ["unit_id"]
-    , AutoIncrement "unit_id"
-    , ForeignKey Employees ["head"] ["employee_id"]
-    , NotNull "name"
-    , Unique ["name"]
+  CREATE_TABLE Units
+    [ PRIMARY_KEY ["unit_id"]
+    , AUTOINCREMENT "unit_id"
+    , FOREIGN_KEY Employees ["head"] ["employee_id"]
+    , NOT_NULL "name"
+    , UNIQUE ["name"]
     ]
 
 export
 createEmployees : Cmd TCreate
 createEmployees =
-  createTable Employees
-    [ PrimaryKey ["employee_id"]
-    , AutoIncrement "employee_id"
-    , ForeignKey Units ["unit_id"] ["unit_id"]
-    , NotNull "name"
-    , NotNull "salary"
-    , NotNull "unit_id"
-    , Unique ["name"]
+  CREATE_TABLE Employees
+    [ PRIMARY_KEY ["employee_id"]
+    , AUTOINCREMENT "employee_id"
+    , FOREIGN_KEY Units ["unit_id"] ["unit_id"]
+    , NOT_NULL "name"
+    , NOT_NULL "salary"
+    , NOT_NULL "unit_id"
+    , UNIQUE ["name"]
     ]
 
 --------------------------------------------------------------------------------

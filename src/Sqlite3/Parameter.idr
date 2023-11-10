@@ -166,16 +166,16 @@ references : (t : Table) -> LAll (TColumn t) xs -> String
 references t cs = "REFERENCES \{t.name} (\{names [<] cs})"
 
 encConstraint : Constraints -> Constraint t -> Constraints
-encConstraint y (NotNull $ TC n)       = addCol y n"NOT NULL"
-encConstraint y (AutoIncrement $ TC n) = addCol y n "AUTOINCREMENT"
-encConstraint y (Unique [TC n])        = addCol y n "UNIQUE"
-encConstraint y (PrimaryKey [TC n])    = addCol y n "PRIMARY KEY"
-encConstraint y (Default s expr)       = addCol y s (encodeDflt expr)
-encConstraint y (Unique xs)            = addTbl y "UNIQUE (\{names [<] xs})"
-encConstraint y (PrimaryKey xs)        = addTbl y "PRIMARY KEY (\{names [<] xs})"
-encConstraint y (Check x)              = addTbl y "CHECK (\{encodeExpr x})"
-encConstraint y (ForeignKey s [p] ys)  = addCol y p.name (references s ys)
-encConstraint y (ForeignKey s xs ys)   =
+encConstraint y (NOT_NULL $ TC n)      = addCol y n"NOT NULL"
+encConstraint y (AUTOINCREMENT $ TC n) = addCol y n "AUTOINCREMENT"
+encConstraint y (UNIQUE [TC n])        = addCol y n "UNIQUE"
+encConstraint y (PRIMARY_KEY [TC n])   = addCol y n "PRIMARY KEY"
+encConstraint y (DEFAULT s expr)       = addCol y s (encodeDflt expr)
+encConstraint y (UNIQUE xs)            = addTbl y "UNIQUE (\{names [<] xs})"
+encConstraint y (PRIMARY_KEY xs)       = addTbl y "PRIMARY KEY (\{names [<] xs})"
+encConstraint y (CHECK x)              = addTbl y "CHECK (\{encodeExpr x})"
+encConstraint y (FOREIGN_KEY s [p] ys) = addCol y p.name (references s ys)
+encConstraint y (FOREIGN_KEY s xs ys)  =
   addTbl y "FOREIGN KEY (\{names [<] xs}) \{references s ys}"
 
 ine : Bool -> String
@@ -225,12 +225,12 @@ updateVals sc (x :: xs) = do
 ||| `State ParamST` is used to keep track of the defined parameters.
 export
 encodeCmd : Cmd t -> ParamStmt
-encodeCmd (CREATE_TABLE t cs ifNotExists) =
+encodeCmd (CreateTable t cs ifNotExists) =
   let CS m ts := foldl encConstraint (CS empty []) cs
       cols    := encodeCols m t.cols
       add     := commaSep id (cols ++ ts)
    in pure "CREATE TABLE \{ine ifNotExists} \{t.name} (\{add});"
-encodeCmd (DROP_TABLE t ifExists) =
+encodeCmd (DropTable t ifExists) =
    pure "DROP TABLE \{ie ifExists} \{t.name};"
 encodeCmd (INSERT t cs vs) = do
   vstr <- exprs [<] vs

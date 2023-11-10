@@ -1,4 +1,4 @@
-module Derive.Sqlite3.AsRow
+module Derive.Sqlite3.ToRow
 
 import Sqlite3.Marshall
 import Sqlite3.Types
@@ -14,19 +14,19 @@ cellTypes : Vect n Name -> ParamCon n -> TTImp
 cellTypes vs (MkParamCon _ _ args) = foldr acc `(Prelude.Nil) args
   where
     acc : ConArg n -> TTImp -> TTImp
-    acc (CArg _ MW _ t) s = `(Prelude.(::) (CellType ~(ttimp vs t)) ~(s))
+    acc (CArg _ MW _ t) s = `(Prelude.(::) (ToCellType ~(ttimp vs t)) ~(s))
     acc _               s = s
 
-||| Top-level declaration of the `AsCell` implementation for the given data type.
+||| Top-level declaration of the `ToCell` implementation for the given data type.
 export
-asRowImplClaim :
+toRowImplClaim :
      (impl : Name)
   -> (p : ParamTypeInfo)
   -> (ParamCon p.numParams)
   -> Decl
-asRowImplClaim impl p c =
-  let tpe := var "AsRow" `app` p.applied
-      pi  := piAll tpe (allImplicits p "AsCell")
+toRowImplClaim impl p c =
+  let tpe := var "ToRow" `app` p.applied
+      pi  := piAll tpe (allImplicits p "ToCell")
    in implClaim impl pi
 
 --------------------------------------------------------------------------------
@@ -54,49 +54,27 @@ parameters (nms : List Name)
   toRowClause =
     accumArgs regular id appList (\(BA _ [x] _) => `(toCell ~(varStr x)))
 
-  fromLHS : SnocList (BoundArg 2 Regular) -> TTImp
-  fromLHS = foldr acc `(Data.List.Quantifiers.All.Nil)
-    where
-      acc : BoundArg 2 Regular -> TTImp -> TTImp
-      acc (BA _ [x,_] _) t = `(Data.List.Quantifiers.All.(::) ~(bindVar x) ~(t))
-
-
-  fromRHS : SnocList (BoundArg 2 Regular) -> TTImp -> TTImp
-  fromRHS [<]                    res = res
-  fromRHS (sx :< (BA a [x,y] _)) res = fromRHS sx (matchEither x res y)
-
-  fromRowClause : Con n vs -> Clause
-  fromRowClause c =
-    let xs      := freshNames "x" c.arty
-        ys      := freshNames "y" c.arty
-        args    := boundArgs regular c.args [xs,ys]
-        applied := appAll c.name (map (\(BA _ [_,y] _) => varStr y) args <>> [])
-     in patClause (fromLHS args) (fromRHS args $ app `(Right) applied)
-
   to : Con n vs -> TTImp
   to c =
     lam (lambdaArg x) $ iCase (var x) implicitFalse [toRowClause c]
 
-  from : Con n vs -> TTImp
-  from c =
-    lam (lambdaArg x) $ iCase (var x) implicitFalse [fromRowClause c]
-
-  asRowDef : Name -> (rowTypes : TTImp) -> Con n vs -> Decl
-  asRowDef f rowTypes c =
-    def f [patClause (var f) `(MkAsRow ~(rowTypes) ~(to c) ~(from c))]
+  toRowDef : Name -> (rowTypes : TTImp) -> Con n vs -> Decl
+  toRowDef f rowTypes c =
+    def f [patClause (var f) `(MkToRow ~(rowTypes) ~(to c))]
 
 --------------------------------------------------------------------------------
 --          Deriving
 --------------------------------------------------------------------------------
 
-||| Generate declarations and implementations for `AsRow` for a given
+||| Generate declarations and implementations for `ToRow` for a given
 ||| record type using default settings.
 export
-AsRow : List Name -> ParamTypeInfo -> Res (List TopLevel)
-AsRow nms p =
+ToRow : List Name -> ParamTypeInfo -> Res (List TopLevel)
+ToRow nms p =
   case (p.cons, p.info.cons) of
     ([c],[d]) =>
-      let impl     := implName p "AsRow"
+      let impl     := implName p "ToRow"
           rowTypes := cellTypes p.paramNames c
-       in Right [ TL (asRowImplClaim impl p c) (asRowDef nms impl rowTypes d) ]
-    _   => failRecord "AsRow"
+       in Right [ TL (toRowImplClaim impl p c) (toRowDef nms impl rowTypes d) ]
+    _   => failRecord "ToRow"
+

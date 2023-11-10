@@ -8,4 +8,4 @@ import Derive.Sqlite3
 public export
 data MolType = Compound | Mixture | Polymer | Enzyme
 
-%runElab derive "MolType" [Show, Eq, Ord, AsCell]
+%runElab derive "MolType" [Show, Eq, Ord, FromCell, ToCell]

@@ -9,13 +9,12 @@ import Derive.Sqlite3
 public export
 record WithID (a : Type) where
   constructor MkWithID
-  id    : Bits32
+  id    : Nat
   value : a
 
 %runElab derive "WithID" [Show,Eq,Ord]
 
 public export
-AsRow a => AsRow (WithID a) where
-  rowTypes = INTEGER :: RowTypes a
-  toRow (MkWithID i v) = toCell i :: toRow v
+FromRow a => FromRow (WithID a) where
+  fromRowTypes   = INTEGER :: FromRowTypes a
   fromRow (h::t) = [| MkWithID (fromCell h) (fromRow t) |]

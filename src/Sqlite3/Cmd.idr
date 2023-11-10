@@ -97,9 +97,9 @@ data Cmd : CmdType -> Type where
 
 export
 insert :
-    {auto as : AsRow v}
+    {auto as : ToRow v}
   ->(t      : Table)
-  -> LAll (TColumn t) (RowTypes v)
+  -> LAll (TColumn t) (ToRowTypes v)
   -> (value : v)
   -> Cmd TInsert
 insert t cs value = INSERT t cs (toExprs $ toRow value)
@@ -272,20 +272,20 @@ public export
 record Query (t : Type) where
   [noHints]
   constructor Q
-  {auto asRow : AsRow t}
-  schema      : Schema
-  from        : From schema
-  columns     : LAll (NamedExpr schema) (RowTypes t)
-  where_      : Expr (ExprSchema columns) BOOL
-  having      : Expr (ExprSchema columns) BOOL
-  group_by    : List (GroupingTerm (ExprSchema columns))
-  order_by    : List (OrderingTerm (ExprSchema columns))
-  limit       : Maybe Nat
-  offset      : Nat
+  {auto fromRow : FromRow t}
+  schema        : Schema
+  from          : From schema
+  columns       : LAll (NamedExpr schema) (FromRowTypes t)
+  where_        : Expr (ExprSchema columns) BOOL
+  having        : Expr (ExprSchema columns) BOOL
+  group_by      : List (GroupingTerm (ExprSchema columns))
+  order_by      : List (OrderingTerm (ExprSchema columns))
+  limit         : Maybe Nat
+  offset        : Nat
 
 public export %inline %hint
-queryAsRow : (q : Query t) => AsRow t
-queryAsRow = q.asRow
+queryAsRow : (q : Query t) => FromRow t
+queryAsRow = q.fromRow
 
 public export
 0 LQuery : List Type -> Type
@@ -294,7 +294,12 @@ LQuery = Query . HList
 infixl 7 `GROUP_BY`,`ORDER_BY`,`WHERE`, `LIMIT`, `OFFSET`, `HAVING`
 
 public export %inline
-SELECT : {s : _} -> AsRow t => LAll (NamedExpr s) (RowTypes t) -> From s -> Query t
+SELECT :
+     {s : _}
+  -> {auto fromRow : FromRow t}
+  -> LAll (NamedExpr s) (FromRowTypes t)
+  -> From s
+  -> Query t
 SELECT xs from = Q s from xs TRUE TRUE [] [] Nothing 0
 
 public export %inline

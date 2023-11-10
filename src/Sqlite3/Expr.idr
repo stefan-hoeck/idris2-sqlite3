@@ -277,7 +277,7 @@ fromString = C
 
 ||| Convert a value of a marshallable type to a literal expression.
 export
-val : AsCell a => a -> Expr s (CellType a)
+val : ToCell a => a -> Expr s (ToCellType a)
 val x =
   case toCell x of
     Nothing => NULL

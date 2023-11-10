@@ -7,3 +7,4 @@ depends = sqlite3-rio
 sourcedir = "src"
 
 modules = README
+        , Tutorial

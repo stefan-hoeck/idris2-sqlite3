@@ -11,7 +11,7 @@ import Sqlite3.Types
 ||| A column in an SQLite table: A name paired with the type of
 ||| values stored in the column.
 |||
-||| Note: With this definition, we do include any constraints with
+||| Note: With this definition, we do not include any constraints with
 |||       our columns. These should be passed on separately when
 |||       using the `CREATE_TABLE` command.
 public export
@@ -24,23 +24,40 @@ record Column where
 public export
 record Table where
   constructor T
+  ||| The table's name
   name : String
+
+  ||| Field `as` is used to rename tables within a `SELECT` statement.
+  ||| This is, for instance, needed when `JOIN`ing a table with itself.
   as   : String
+
+  ||| The list of table columns
   cols : List Column
 
+||| Utility constructor for tables that sets fields `name` and `as`
+||| both the value of the string argument.
 public export %inline
 table : String -> List Column -> Table
 table n = T n n
 
+||| Utility to change the name of a table in a `SELECT` statement.
+|||
+||| The name was chosen to resemble SQL syntax, and it is recommended
+||| to use this in infix notation:
+|||
+||| ```idris
+||| students `AS` "st"
+||| ```
 public export %inline
 AS : Table -> String -> Table
 AS (T n _ cs) as = T n as cs
 
+||| Computes the types of columns stored in a table.
 public export %inline
 ColTypes : Table -> List SqliteType
 ColTypes = map type . cols
 
-||| Tries and looks up a column type by name
+||| Tries to look up a column type by name
 ||| in a list of columns.
 |||
 ||| We use this often in proofs, therefore this comes with
@@ -48,8 +65,7 @@ ColTypes = map type . cols
 public export
 FindCol : String -> List Column -> Maybe SqliteType
 FindCol s []        = Nothing
-FindCol s (x :: xs) =
-  if x.name == s then Just x.type else FindCol s xs
+FindCol s (x :: xs) = if x.name == s then Just x.type else FindCol s xs
 
 ||| Column type of a column (given by name) in a list of
 ||| columns.

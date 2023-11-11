@@ -121,7 +121,7 @@ So, we have a table for problems the students have to solve during
 exams, as well as a table of exams listing the exam's topic, as well
 as the term and year when the exam was held. In addition, we define two
 link tables for the many-to-many relations between problems and exams,
-as well as problems and students who solved them.
+as well as for problems and students who solved them.
 
 ### Creating Tables
 
@@ -237,7 +237,7 @@ typed and checked by Idris.
 
 ## Behind the Scenes: Finding Columns and their Types via String Literals
 
-What we saw so far, was very basic Idris programming: We just used
+What we saw so far was very basic Idris programming: We just used
 a bunch of data constructors or utilities thereof to define Idris
 values representing SQL statements and commands. I'll still have to
 show, how to use these to actually run the commands they represent
@@ -247,17 +247,18 @@ does Idris resolve column names and figure out the types associated
 with columns. I have looked at several libraries in other functional
 languages providing DSLs for interacting with the world of relational
 databases, and while many of them came with nice introductory tutorials,
-none of them explained in detail how everything and why these libraries
-are implemented.
+none of them explained in detail how everything worked
+and why these libraries were implemented the way they are.
 
 At least in our case, the implementation is not very hard to
-understand, so here we go.
+understand, if you know about two core concepts in Idris: Unification
+and proof search.
 
 ### Looking up Table Columns
 
 In module `Sqlite3.Table`, there is a very simple
-function called `FindCol`, which tries to lookup a column in a
-list of column and return its type. Since this might fail,
+function called `FindCol`, which tries to lookup a column name in a
+list of columns and return its type. Since this might fail,
 it wraps the result in a `Maybe`. But then there is a second
 function called `ListColType`, which does the same thing by invoking
 `FindCol` but it takes an additional proof that `FindCol`
@@ -265,28 +266,26 @@ returns a `Just` for the current column name and list of columns.
 
 This is the core design decision behind name resolution in this
 library: Instead of using an inductive type such as `Elem` for lists
-for proofing that a value is present in a container, we define
+for proving that a value is present in a container, we define
 a lookup function that returns a `Nothing` in case the lookup fails.
-This decision has two consequences, one good, the other rather
-restricting: First, name resolutions mainly occurs during unification
+This decision has two consequences, one good and the other rather
+limiting: First, name resolutions mainly occurs during unification
 instead of during proof search, that is, Idris will evaluate the
 result of invoking `FindCol` with the current arguments, and
 it will then run a very simple proof search to check
 whether the result is a `Just` or not. This is
 both faster than inductive proof search and it is not restricted
 by the default proof search limit: We can lookup names in very
-large lists of columns.
-
-For instance:
+large lists of columns. For instance:
 
 ```idris
 Tbl : Table
 Tbl =
   table "foo" $
-    map (\n => C ("x" ++ prim__cast_Bits8String n) INTEGER) [0..55]
+    map (\n => C (prim__cast_Bits8String n) INTEGER) [0..55]
 
 test : Expr [<Tbl] INTEGER
-test = "x55"
+test = "55"
 ```
 
 Function `test` typechecks in a reasonable amount of time, while
@@ -295,9 +294,9 @@ proof search approach unless we would increase the proof search depth
 limit before its implementation.
 
 However, this decision can also be rather restrictive: All values
-and table definitions involved must be known at compile time. It is
+and table definitions involved *must* be known at compile time. It is
 therefore assumed that the database schema has been declared and
-publicly exported as in the examples above. On the other hand it
+publicly exported as in the examples above. On the other hand, it
 is hard (or even impossible without resorting to `believe_me`) to
 come up with these proofs in the presence of abstract table
 definitions. Only time will tell if this will pay out in the end,
@@ -338,7 +337,8 @@ pointsPositive = "points" > 0
 A lot is going on here: The `(>)` operator is one of the data
 constructors of `Sqlite3.Expr.Expr`, which is indexed by
 a schema (a snoclist) of tables and the expression's SQLite type.
-They types of the expressions on both sides of `(>)` must be identical,
+The types of the expressions on both sides of `(>)` must be identical,
+because that's how the `(>)` data constructor has been defined,
 so Idris must have a way of figuring out what to do with the
 integer literal on the right. Luckily, the string literal `"points"`
 is enough to figure out that the left hand side is of type
@@ -352,9 +352,9 @@ It is paramount that all of the above works smoothly
 in order to get nice and concise syntax when defining SQL expressions
 and commands. The good new is that not a lot of complexity
 is involved here: Understanding how `fromString` works for
-`TColumn` as well as `Expr` - and both are implemented via
+`TColumn` as well as `Expr` - both are implemented via
 the same technique - makes everything else fall into place.
-This is a tremendous improvement (my personal opinion)
+In my opinion, this is quite an improvement
 over languages such as Haskell, where a lot of type class
 magic I still don't fully understand is
 necessary to achieve similar results.
@@ -437,5 +437,239 @@ a multi-table schema, you need to give its qualified name. This means
 you'll have to type some more, but comes with the benefit that it
 is stable and typechecks even when a new column with the same name
 is added to another table in the schema.
+
+## Mutating the Database
+
+In this section, we are going to look at how to add, update, and delete
+data in database tables. This will require us to talk about how to
+convert Idris values from and to values stored in a SQLite table,
+and when we look at updating and deleting data, we will also
+have to talk about SQL expressions.
+
+### Inserting Data
+
+Here is a first example:
+
+```idris
+insertStudent1 : (name, email : String) -> Cmd TInsert
+insertStudent1 n e = INSERT Students ["name", "email"] [val n, val e]
+```
+
+As you can see, we just use the `INSERT` data constructor of `Cmd`, list
+the table and columns into which we want to insert data, and add
+the values to a list of values by wrapping them with `val`.
+
+But this is of course not enough to understand what's going on, nor is
+it very useful in the general case, so let us try a couple of things
+to better understand and maybe even improve the code.
+
+First and foremost, it would be important to know, if Idris performs
+any sanity checks in the code above. For instance, could we insert
+a numeric email address instead of a string? Let's try:
+
+```idris
+failing "Mismatch between: TEXT and INTEGER"
+  insertStudent2 : String -> Bits32 -> Cmd TInsert
+  insertStudent2 n e = INSERT Students ["name", "email"] [val n, val e]
+```
+
+That looks promising. Somehow, Idris figured out that if we want to insert
+a value of type `Bits32`, the corresponding column type should be `INTEGER`.
+
+### Interfaces `ToCell` and `FromCell`
+
+The interfaces responsible for these conversions are in module
+`Sqlite3.Marshall`. Interface `ToCell` describes, how to convert an
+Idris value to an SQLite value. Here's an example implementation: We
+are going to define an enum type for the topics of our exams:
+
+```idris
+data Topic : Type where
+  OrganicChemistry   : Topic
+  Cheminformatics    : Topic
+  StructureAnalysis  : Topic
+  MolecularModelling : Topic
+
+%runElab derive "Topic" [Show,Eq,Ord]
+
+ToCell Topic where
+  toCellType = TEXT
+
+  toCell OrganicChemistry   = Just "Organic Chemistry"
+  toCell Cheminformatics    = Just "Cheminformatics"
+  toCell StructureAnalysis  = Just "Structure Analysis"
+  toCell MolecularModelling = Just "Molecular Modelling"
+```
+
+As you can see, interface `ToCell` has two functions: `toCellType` specifies
+the SQLite type our values get converted to, and `toCell` describes this
+conversion. The result type of `toCell` is `Maybe (IdrisType toCellType)`.
+In this case, it is `Maybe String`, because `IdrisType TEXT` will return
+`String` as shown in the table at the beginning of this tutorial.
+Since all values in SQLite tables are theoretically nullable, we must
+return a `Maybe` with `Nothing` corresponding to `NULL`.
+
+While we are already at it, we can also write an implementation for
+`FromCell Topic`, which will us to return values of type `Topic`
+as part of our database queries:
+
+
+```idris
+FromCell Topic where
+  fromCellType = TEXT
+
+  fromCell =
+    decodeJust "Topic" $ \case
+      "Organic Chemistry"   => Right OrganicChemistry
+      "Cheminformatics"     => Right Cheminformatics
+      "Structure Analysis"  => Right StructureAnalysis
+      "Molecular Modelling" => Right MolecularModelling
+      s                     => Left (DecodingError TEXT "Unknown topic: \{s}")
+```
+
+In the implementation above, we use the `decodeJust` utility for
+converting values that must not be `NULL`. You should use this most
+of the time, because most of the time you might just want to use
+`Maybe a` for nullable values. The result type of `fromCell` is
+`Either SqlError Topic` where `SqlError` is a sum type defined in
+module `Sqlite3.Types`.
+
+On many occasions, conversions as the one above are very boring to
+write, so we'd like Idris to do that for us. Like other Idris
+libraries, idris2-sqlite3 provides elaborator scripts for deriving
+certain marshallers automatically. For interfaces `ToCell` and
+`FromCell`, this is currently possible for newtype wrappers as
+well as for enumeration type, which will just use the constructor
+name when being converted. Here's an example:
+
+```idris
+data Term : Type where
+  SS : Term    -- spring semester
+  AS : Term    -- autumn semester
+
+%runElab derive "Term" [Show,Eq,Ord,ToCell,FromCell]
+
+record Email where
+  constructor MkEmail
+  email : String
+
+%runElab derive "Email" [Show,Eq,Ord,FromString,ToCell,FromCell]
+```
+
+Let us now try if this works as expected:
+
+```idris
+insertExam1 : Topic -> Term -> (year : Bits32) -> Cmd TInsert
+insertExam1 to te y =
+  INSERT Exams ["topic", "term", "year"] [val to, val te, val y]
+```
+
+Neat. Let me finish this subsection with some notes:
+
+* Make sure to `public export` marshallers such as `ToCell` and `FromCell`
+  because the values of `toCellType` and `fromCellType` must be
+  known at compile time
+* One might wonder why we did not add a second parameter to the
+  `ToCell` and `FromCell` interfaces, instead of returning the
+  SQLite from an interface function. I tried both versions, but it turned
+  out that type inference works *much* better with single-parameter
+  interfaces (even if we define a dependency between the parameters).
+  In addition, single-parameter interfaces work well with the
+  heterogeneous containers in `Data.List.Quantifiers`, so this spared
+  us from adding some additional list-like data types for wrapping
+  our `ToCell` proofs.
+* At first, there was only one interface wrapping the functionality
+  of both `ToCell` and `FromCell`. However, there are datatype that
+  are easy to convert in one direction but very hard or impossible
+  to implement in the other. For instance, there are `FromCell`
+  implementations for `Nat` and `Integer`, while the `ToCell`
+  implementations are currently missing, because it's not clear
+  how to do that without potential loss of information (unless we
+  convert large integers to `TEXT` or `BLOB`, which is then somewhat
+  inconsistent with the numeric type).
+* I'm also planning to provide derivable marshallers for refinement
+  types from the [idris2-refined](https://github.com/stefan-hoeck/idris2-refined)
+  library, but these are not available yet.
+
+### Marshalling Records: Interfaces `ToRow` and `FromRow`
+
+It would be much nicer if we could use custom Idris records
+directly in our `INSERT` statements instead of having to pass
+all arguments manually. Fortunately, this is possible.
+Let us first define a record type for students:
+
+```idris
+record Student where
+  constructor MkStudent
+  name  : String
+  email : Email
+
+%runElab derive "Student" [Show,Eq]
+```
+
+The interfaces required to convert record types from and to table rows
+can also be found in `Sqlite3.Marshall` and are called `FromRow` and
+`ToRow`. Just like `FromCell` and `ToCell`, the come with two
+functions: One for specifying the type(s) at the database side, the
+other for performing the actual conversion. Here are the implementations
+for `Student`:
+
+```idris
+FromRow Student where
+  fromRowTypes  = [TEXT,TEXT]
+  fromRow [n,e] = [| MkStudent (fromCell n) (fromCell e) |]
+
+ToRow Student where
+  toRowTypes            = [TEXT,TEXT]
+  toRow (MkStudent n e) = [toCell n, toCell e]
+```
+
+As you can see, these implementations are very straight forward: We specify
+a list of `SqliteType`s to represent the cell types in a data base row,
+and we convert our values from and to a heterogeneous list of type
+`All IdrisType fromRowTypes`, where `All` comes from `Data.List.Quantifiers` in
+the base library.
+
+Again, it is possible to derive this boring stuff automatically:
+
+```idris
+record Exam where
+  constructor MkExam
+  topic : Topic
+  term  : Term
+  year  : Bits16
+
+%runElab derive "Exam" [Show,Eq,ToRow,FromRow]
+```
+
+With these interfaces at hand, it is much nicer to insert data into
+tables with a utility function called `insert`, which is specialized
+to work with Idris types with a `ToRow` implementation:
+
+```idris
+insertStudent : Student -> Cmd TInsert
+insertStudent = insert Students ["name", "email"]
+
+insertExam : Exam -> Cmd TInsert
+insertExam = insert Exams ["topic", "term", "year"]
+```
+
+Again, Idris verifies for us that the types match up. The following fails:
+
+```idris
+failing "Mismatch between: TEXT and INTEGER"
+  insertExam2 : Exam -> Cmd TInsert
+  insertExam2 = insert Exams ["topic", "year", "term"]
+```
+
+This is not bulletproof: We could still mix up the order of `topic` and `term`
+without getting an error, because both are represented as `TEXT`. The only
+way out of this would be to also generate and match up table column names
+from the record fields. This is currently not supported, because I'm not
+sure if we always want to use our record field names as the names for
+our table columns. Specifying a way to rename columns during marshalling
+might help: This is what we are currently doing in the
+[idris2-json](https://github.com/stefan-hoeck/idris2-json) library.
+
 <!-- vi: filetype=idris2:syntax=markdown
 -->

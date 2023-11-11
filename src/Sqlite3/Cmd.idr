@@ -8,6 +8,8 @@ import Sqlite3.Types
 
 %default total
 
+infix 1 .=
+
 ||| We can always convert a list of marshallable Idris values to
 ||| a list of SQL expressions.
 export
@@ -22,6 +24,20 @@ record Val (t : Table) where
   name        : String
   {auto 0 prf : IsJust (FindCol name t.cols)}
   val         : Expr [<t] (TableColType name t)
+
+||| Operator alias for the data constructor of `Val`,
+||| specialized for usage with Idris types with a
+||| `ToCell` implementation.
+public export %inline
+(.=) :
+     {0 t        : Table}
+  -> {auto to    : ToCell a}
+  -> (name       : String)
+  -> {auto 0 prf : IsJust (FindCol name t.cols)}
+  -> {auto 0 eq  : TableColType name t === ToCellType a}
+  -> (val        : a)
+  -> Val t
+(.=) name v = V name (rewrite eq in val v)
 
 ||| Column and table constraints to be used when creating a new table.
 public export
@@ -287,7 +303,7 @@ namespace NameExpr
     -> (col      : String)
     -> {auto 0 p : IsJust (FindSchemaCol col s)}
     -> NamedExpr s (SchemaColType col s)
-  fromString col = C col `AS` ""
+  fromString col = Col col `AS` ""
 
 ||| Computes a list of named and typed columns from a list of
 ||| name expressions.

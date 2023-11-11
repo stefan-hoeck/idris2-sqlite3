@@ -93,14 +93,14 @@ encodeExprP (Raw s)      = pure s
 encodeExprP NULL         = pure "NULL"
 encodeExprP TRUE         = pure "1"
 encodeExprP FALSE        = pure "0"
-encodeExprP (C c)        = pure c
-encodeExprP (Coalesce xs)     = encFun "coalesce" xs
-encodeExprP (Count x)         = encFun1 "count" x
-encodeExprP (Avg x)           = encFun1 "avg" x
-encodeExprP (Sum x)           = encFun1 "sum" x
-encodeExprP (Min x)           = encFun1 "min" x
-encodeExprP (Max x)           = encFun1 "max" x
-encodeExprP (GroupConcat x s) = do
+encodeExprP (Col c)      = pure c
+encodeExprP (COALESCE xs)     = encFun "coalesce" xs
+encodeExprP (COUNT x)         = encFun1 "count" x
+encodeExprP (AVG x)           = encFun1 "avg" x
+encodeExprP (SUM x)           = encFun1 "sum" x
+encodeExprP (MIN x)           = encFun1 "min" x
+encodeExprP (MAX x)           = encFun1 "max" x
+encodeExprP (GROUP_CONCAT x s) = do
   ex <- encodeExprP x
   pure "group_concat(\{ex}, \{s})"
 

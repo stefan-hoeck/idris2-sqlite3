@@ -189,10 +189,10 @@ unitStats : LQuery [String,Bits32,Salary,Salary,Salary]
 unitStats =
   SELECT
     [ "u.name"
-    ,  Count "e.name" `AS` "num_employees"
-    ,  Avg "e.salary" `AS` "average_salary"
-    ,  Min "e.salary" `AS` "min_salary"
-    ,  Max "e.salary" `AS` "max_salary"
+    ,  COUNT "e.name" `AS` "num_employees"
+    ,  AVG "e.salary" `AS` "average_salary"
+    ,  MIN "e.salary" `AS` "min_salary"
+    ,  MAX "e.salary" `AS` "max_salary"
     ]
     [< FROM (Employees `AS` "e")
     ,  JOIN (Units `AS` "u") `USING` ["unit_id"]

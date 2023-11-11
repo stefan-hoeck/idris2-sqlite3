@@ -510,7 +510,7 @@ Since all values in SQLite tables are theoretically nullable, we must
 return a `Maybe` with `Nothing` corresponding to `NULL`.
 
 While we are already at it, we can also write an implementation for
-`FromCell Topic`, which will us to return values of type `Topic`
+`FromCell Topic`, which will allow us to return values of type `Topic`
 as part of our database queries:
 
 
@@ -539,7 +539,7 @@ write, so we'd like Idris to do that for us. Like other Idris
 libraries, idris2-sqlite3 provides elaborator scripts for deriving
 certain marshallers automatically. For interfaces `ToCell` and
 `FromCell`, this is currently possible for newtype wrappers as
-well as for enumeration type, which will just use the constructor
+well as for enumeration types, which will just use the constructor
 name when being converted. Here's an example:
 
 ```idris
@@ -567,27 +567,27 @@ insertExam1 to te y =
 Neat. Let me finish this subsection with some notes:
 
 * Make sure to `public export` marshallers such as `ToCell` and `FromCell`
-  because the values of `toCellType` and `fromCellType` must be
-  known at compile time
+  because the results of `toCellType` and `fromCellType` must be
+  known at compile time.
 * One might wonder why we did not add a second parameter to the
-  `ToCell` and `FromCell` interfaces, instead of returning the
-  SQLite from an interface function. I tried both versions, but it turned
+  `ToCell` and `FromCell` interfaces instead of returning the
+  SQLite from an interface function. I tried both variants, but it turned
   out that type inference works *much* better with single-parameter
-  interfaces (even if we define a dependency between the parameters).
-  In addition, single-parameter interfaces work well with the
-  heterogeneous containers in `Data.List.Quantifiers`, so this spared
+  interfaces, even when only one parameter is used for interface
+  resolution. In addition, single-parameter interfaces work well with the
+  heterogeneous containers in `Data.List.Quantifiers`, so this spares
   us from adding some additional list-like data types for wrapping
   our `ToCell` proofs.
 * At first, there was only one interface wrapping the functionality
-  of both `ToCell` and `FromCell`. However, there are datatype that
+  of both `ToCell` and `FromCell`. However, there are data types that
   are easy to convert in one direction but very hard or impossible
-  to implement in the other. For instance, there are `FromCell`
+  to transform in the other. For instance, there are `FromCell`
   implementations for `Nat` and `Integer`, while the `ToCell`
   implementations are currently missing, because it's not clear
   how to do that without potential loss of information (unless we
   convert large integers to `TEXT` or `BLOB`, which is then somewhat
   inconsistent with the numeric type).
-* I'm also planning to provide derivable marshallers for refinement
+* I'm planning to provide derivable marshallers for refinement
   types from the [idris2-refined](https://github.com/stefan-hoeck/idris2-refined)
   library, but these are not available yet.
 
@@ -670,6 +670,63 @@ sure if we always want to use our record field names as the names for
 our table columns. Specifying a way to rename columns during marshalling
 might help: This is what we are currently doing in the
 [idris2-json](https://github.com/stefan-hoeck/idris2-json) library.
+But again, this is not available yet.
+
+### Updating and deleting Rows
+
+The commands for updating and deleting rows in a table do not add
+any additional complexity only some new syntax:
+
+```idris
+updateStudent : Bits32 -> Student -> Cmd TUpdate
+updateStudent x (MkStudent n e) =
+  UPDATE Students ["name" .= n, "email" .= e] ("student_id" == val x)
+
+deleteStudent : Bits32 -> Cmd TDelete
+deleteStudent x = DELETE Students ("student_id" == val x)
+```
+
+There's a new operator involved with updates, which pairs a column
+name with an Idris type that converts to the correct SQLite type.
+See data type `Val` in module `Sqlite3.Cmd` and the associated
+operator `(.=)` for the details.
+
+However, once thing we avoided discussing so far are SQL expressions,
+although we already have seen several of them. Let's look at those
+next.
+
+### SQL Expressions
+
+Module `Sqlite3.Expr` exports indexed data type `Expr s t`, where the
+first index stands for a schema (a snoclist of tables as discussed
+above) and the second for the SQLite result type of the expression
+of type `SqliteType`. `Expr` is a large data type, currently
+consisting of more than thirty data constructors wrapping the
+core expressions we want to have at our hands when interacting
+with databases.
+
+As with other functions and data constructors we have seen so far,
+operators and all-caps data constructors correspond more or less
+directly to similar operators and functions in SQL, with certain
+operators being more on the Idris side of things (for instance
+`(&&)` instead of `AND` and `(||)` instead of `OR`
+for boolean conjunctions and disjunctions).
+
+As with other types we have seen so far, `Expr s t` comes with a
+`fromString` function for referencing (possibly qualified) columns
+in a schema while deriving the correct SQL type at the same time.
+In addition, the usual numeric interfaces have been implemented
+for `Expr`, so that typical arithmetic operators are available as
+well.
+
+Module `Sqlite3.Expr` exports function `encodeExpr` for
+converting an expression to the corresponding SQL code. Note,
+that this will correctly escape string literals and encode
+byte vectors as strings of hexadecimal characters. However,
+it is more efficient and safer to use SQL parameters as placeholders for
+literals and use the C-API to set the values of all parameters.
+As we will see, this is being done automatically most of the time,
+so client code does not have to take care of this.
 
 <!-- vi: filetype=idris2:syntax=markdown
 -->

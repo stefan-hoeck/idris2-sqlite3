@@ -728,5 +728,13 @@ literals and use the C-API to set the values of all parameters.
 As we will see, this is being done automatically most of the time,
 so client code does not have to take care of this.
 
+## Running SQLite Commands
+
+To be added...
+
+## Queries
+
+To be added...
+
 <!-- vi: filetype=idris2:syntax=markdown
 -->

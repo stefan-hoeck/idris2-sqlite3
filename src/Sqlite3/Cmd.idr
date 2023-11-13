@@ -8,6 +8,8 @@ import Sqlite3.Types
 
 %default total
 
+infix 1 .=
+
 ||| We can always convert a list of marshallable Idris values to
 ||| a list of SQL expressions.
 export
@@ -23,22 +25,36 @@ record Val (t : Table) where
   {auto 0 prf : IsJust (FindCol name t.cols)}
   val         : Expr [<t] (TableColType name t)
 
+||| Operator alias for the data constructor of `Val`,
+||| specialized for usage with Idris types with a
+||| `ToCell` implementation.
+public export %inline
+(.=) :
+     {0 t        : Table}
+  -> {auto to    : ToCell a}
+  -> (name       : String)
+  -> {auto 0 prf : IsJust (FindCol name t.cols)}
+  -> {auto 0 eq  : TableColType name t === ToCellType a}
+  -> (val        : a)
+  -> Val t
+(.=) name v = V name (rewrite eq in val v)
+
 ||| Column and table constraints to be used when creating a new table.
 public export
 data Constraint : Table -> Type where
-  NotNull       : {0 x : _} -> TColumn t x -> Constraint t
-  AutoIncrement : {0 x : _} -> TColumn t x -> Constraint t
-  Unique        : {0 xs : _} -> LAll (TColumn t) xs -> Constraint t
-  PrimaryKey    : {0 xs : _} -> LAll (TColumn t) xs -> Constraint t
-  ForeignKey    :
+  NOT_NULL      : {0 x : _} -> TColumn t x -> Constraint t
+  AUTOINCREMENT : {0 x : _} -> TColumn t x -> Constraint t
+  UNIQUE        : {0 xs : _} -> LAll (TColumn t) xs -> Constraint t
+  PRIMARY_KEY   : {0 xs : _} -> LAll (TColumn t) xs -> Constraint t
+  FOREIGN_KEY   :
        {0 xs : _}
     -> (s       : Table)
     -> LAll (TColumn t) xs
     -> LAll (TColumn s) xs
     -> Constraint t
 
-  Check         : Expr [<t] BOOL -> Constraint t
-  Default       :
+  CHECK         : Expr [<t] BOOL -> Constraint t
+  DEFAULT       :
        {0 t        : Table}
     -> (s          : String)
     -> {auto 0 prf : IsJust (FindCol s t.cols)}
@@ -48,7 +64,7 @@ data Constraint : Table -> Type where
 ||| Index used to distinguish different types of commands.
 |||
 ||| This should facilitate writing combinator such as
-||| `if_not_exists` to operate only on certain commands.
+||| `IF_NOT_EXISTS` to operate only on certain commands.
 public export
 data CmdType : Type where
   TCreate : CmdType
@@ -62,21 +78,41 @@ data CmdType : Type where
 ||| inserting, updating, or deleting rows in a table.
 public export
 data Cmd : CmdType -> Type where
-  CREATE_TABLE :
+  ||| Information used to create a new table.
+  |||
+  ||| It is recommended to use a combination of `CREATE_TABLE` and
+  ||| `IF_NOT_EXISTS` instead of using this constructor directly.
+  CreateTable :
        (t           : Table)
     -> (attrs       : List (Constraint t))
     -> (ifNotExists : Bool)
     -> Cmd TCreate
 
-  DROP_TABLE : (t : Table) -> (ifExists : Bool) -> Cmd TDrop
+  DropTable : (t : Table) -> (ifExists : Bool) -> Cmd TDrop
 
+  ||| Information required to insert data into a table.
+  |||
+  ||| This is well suited if you want to have full control over
+  ||| the expressions used to insert data. If, however, you want
+  ||| to insert an Idris value with a `ToRow` implementation,
+  ||| consider using function `insert` instead.
   INSERT :
        {0 ts : List SqliteType}
-    -> (t : Table)
+    -> (t    : Table)
     -> (cols : LAll (TColumn t) ts)
     -> (vals : LAll (Expr [<t]) ts)
     -> Cmd TInsert
 
+  ||| Information required to insert or replace data in a a table.
+  |||
+  ||| This is like insert, but will replace values to fullfil `UNIQUE`
+  ||| constraints in the table. As such, it is useful for updating
+  ||| data that might not yet be present in a table.
+  |||
+  ||| This is well suited if you want to have full control over
+  ||| the expressions used to replace data. If, however, you want
+  ||| to insert an Idris value with a `ToRow` implementation,
+  ||| consider using function `replace` instead.
   REPLACE :
        {0 ts : List SqliteType}
     -> (t : Table)
@@ -84,25 +120,40 @@ data Cmd : CmdType -> Type where
     -> (vals : LAll (Expr [<t]) ts)
     -> Cmd TInsert
 
+  ||| Information required to update values in table.
   UPDATE :
        (t      : Table)
     -> (set    : List (Val t))
     -> (where_ : Expr [<t] BOOL)
     -> Cmd TUpdate
 
+  ||| Information required to delete values from a table.
   DELETE :
        (t      : Table)
     -> (where_ : Expr [<t] BOOL)
     -> Cmd TDelete
 
+||| Utility version of `INSERT` for those cases when you want to
+||| insert an Idris value with a `ToRow` implementation.
 export
 insert :
     {auto as : ToRow v}
-  ->(t      : Table)
+  ->(t       : Table)
   -> LAll (TColumn t) (ToRowTypes v)
   -> (value : v)
   -> Cmd TInsert
 insert t cs value = INSERT t cs (toExprs $ toRow value)
+
+||| Utility version of `REPLACE` for those cases when you want to
+||| replace an Idris value with a `ToRow` implementation.
+export
+replace :
+    {auto as : ToRow v}
+  ->(t       : Table)
+  -> LAll (TColumn t) (ToRowTypes v)
+  -> (value : v)
+  -> Cmd TInsert
+replace t cs value = REPLACE t cs (toExprs $ toRow value)
 
 namespace Cmds
   ||| A list of different types of commands, with the
@@ -130,23 +181,23 @@ namespace Cmds
 
 ||| Create a table only if it does not yet exist.
 public export
-if_not_exists : Cmd TCreate -> Cmd TCreate
-if_not_exists (CREATE_TABLE t attrs _) = CREATE_TABLE t attrs True
+IF_NOT_EXISTS : Cmd TCreate -> Cmd TCreate
+IF_NOT_EXISTS (CreateTable t attrs _) = CreateTable t attrs True
 
 ||| Drop a table only if it exists.
 public export
-if_exists : Cmd TDrop -> Cmd TDrop
-if_exists (DROP_TABLE t _) = DROP_TABLE t True
+IF_EXISTS : Cmd TDrop -> Cmd TDrop
+IF_EXISTS (DropTable t _) = DropTable t True
 
-||| Convenience constructor for the `CREATE_TABLE` command
+||| Convenience constructor for the `CreateTable` command
 public export %inline
-createTable : (t : Table) -> List (Constraint t) -> Cmd TCreate
-createTable t as = CREATE_TABLE t as False
+CREATE_TABLE : (t : Table) -> List (Constraint t) -> Cmd TCreate
+CREATE_TABLE t as = CreateTable t as False
 
-||| Convenience constructor for the `DROP_TABLE` command
+||| Convenience constructor for the `DropTable` command
 public export %inline
-dropTable : (t : Table) -> Cmd TDrop
-dropTable t = DROP_TABLE t False
+DROP_TABLE : (t : Table) -> Cmd TDrop
+DROP_TABLE t = DropTable t False
 
 public export
 0 JoinPred : Schema -> Table -> Type
@@ -252,14 +303,28 @@ namespace NameExpr
     -> (col      : String)
     -> {auto 0 p : IsJust (FindSchemaCol col s)}
     -> NamedExpr s (SchemaColType col s)
-  fromString col = C col `AS` ""
+  fromString col = Col col `AS` ""
 
+||| Computes a list of named and typed columns from a list of
+||| name expressions.
+|||
+||| Expressions with an empty string as their name are not included in
+||| the result.
 public export
 ExprColumns : {ts : _} -> LAll (NamedExpr s) ts -> List Column
 ExprColumns             []              = []
 ExprColumns             (AS _ "" :: xs) = ExprColumns xs
 ExprColumns {ts = t::_} (AS _ n  :: xs) = C n t :: ExprColumns xs
 
+||| Appends an unnamed table with the list of columns coming from
+||| the given list of named expressions to a schema.
+|||
+||| Expressions with an empty string as their name are not included in
+||| the result.
+|||
+||| This is used to compute the full `Schema` to be used in
+||| those fields of `Query` that are used for filtering, grouping, and
+||| sorting.
 public export
 ExprSchema : {s : _} -> {ts : _} -> LAll (NamedExpr s) ts -> Schema
 ExprSchema xs =

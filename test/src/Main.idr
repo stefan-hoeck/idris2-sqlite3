@@ -30,10 +30,10 @@ file x = F $ pack [x,x+1,x+2]
 app : App Errs ()
 app = withDB ":memory:" $ do
   cmds $
-    [ if_not_exists createMolecules
-    , if_not_exists createFiles
-    , if_not_exists createUnits
-    , if_not_exists createEmployees
+    [ IF_NOT_EXISTS createMolecules
+    , IF_NOT_EXISTS createFiles
+    , IF_NOT_EXISTS createUnits
+    , IF_NOT_EXISTS createEmployees
     , insertMol $ M "Ethanol"    (Just "64-17-5") (Just 46.069) Compound
     , insertMol $ M "Strychnine" (Just "57-24-9") (Just 334.419) Compound
     , insertMol $ M "Atropine"   (Just "51-55-8") (Just 289.375) Compound

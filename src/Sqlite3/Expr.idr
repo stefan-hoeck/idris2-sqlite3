@@ -38,7 +38,7 @@ data Expr : Schema -> SqliteType -> Type where
 
   ||| A column in a list of tables. Typically, it is convenient to
   ||| use string literals directly for this (see `Expr.fromString`).
-  C      :
+  Col    :
        {0 s      : Schema}
     -> (col      : String)
     -> {auto 0 p : IsJust (FindSchemaCol col s)}
@@ -200,37 +200,37 @@ data Expr : Schema -> SqliteType -> Type where
   IN                : Expr s t -> List (Expr s t) -> Expr s BOOL
 
   ||| Returns the first non-NULL value in the given list of expressions.
-  Coalesce          : List (Expr s t) -> Expr s t
+  COALESCE          : List (Expr s t) -> Expr s t
 
   ||| Counts the number of aggregated values.
   |||
   ||| This is typically used with a `GROUP BY` statement.
-  Count             : Expr s t -> Expr s INTEGER
+  COUNT             : Expr s t -> Expr s INTEGER
 
   ||| Returns the average of accumulated values.
   |||
   ||| This is typically used with a `GROUP BY` statement.
-  Avg               : (0 prf : Numeric t) => Expr s t -> Expr s REAL
+  AVG               : (0 prf : Numeric t) => Expr s t -> Expr s REAL
 
   ||| Returns the sum of accumulated values.
   |||
   ||| This is typically used with a `GROUP BY` statement.
-  Sum               : (0 prf : Numeric t) => Expr s t -> Expr s t
+  SUM               : (0 prf : Numeric t) => Expr s t -> Expr s t
 
   ||| Returns the minimum of accumulated values.
   |||
   ||| This is typically used with a `GROUP BY` statement.
-  Min               : Expr s t -> Expr s t
+  MIN               : Expr s t -> Expr s t
 
   ||| Returns the maximum of accumulated values.
   |||
   ||| This is typically used with a `GROUP BY` statement.
-  Max               : Expr s t -> Expr s t
+  MAX               : Expr s t -> Expr s t
 
   ||| Concatenates aggregated text values using the given separator.
   |||
   ||| This is typically used with a `GROUP BY` statement.
-  GroupConcat       : Expr s TEXT -> (sep : String) -> Expr s TEXT
+  GROUP_CONCAT      : Expr s TEXT -> (sep : String) -> Expr s TEXT
 
 export %inline
 Num (Expr s INTEGER) where
@@ -273,7 +273,7 @@ fromString :
   -> (col      : String)
   -> {auto 0 p : IsJust (FindSchemaCol col s)}
   -> Expr s (SchemaColType col s)
-fromString = C
+fromString = Col
 
 ||| Convert a value of a marshallable type to a literal expression.
 export
@@ -414,7 +414,7 @@ encodeExpr (ShiftL x y) = encOp "<<" x y
 encodeExpr (NOT x)      = encPrefix "NOT" x
 encodeExpr (Neg x)      = encPrefix "-" x
 encodeExpr (Raw s)      = s
-encodeExpr (C c)        = c
+encodeExpr (Col c)      = c
 encodeExpr NULL         = "NULL"
 encodeExpr TRUE         = "1"
 encodeExpr FALSE        = "0"
@@ -424,13 +424,13 @@ encodeExpr CURRENT_TIMESTAMP = "CURRENT_TIMESTAMP"
 encodeExpr (LIKE x y)        = encOp "LIKE" x y
 encodeExpr (GLOB x y)        = encOp "GLOB" x y
 encodeExpr (IN x xs)         = "\{encodeExpr x} IN (\{encExprs [<] xs})"
-encodeExpr (Coalesce xs)     = encFun "coalesce" xs
-encodeExpr (Count x)         = encFun1 "count" x
-encodeExpr (Avg x)           = encFun1 "avg" x
-encodeExpr (Sum x)           = encFun1 "sum" x
-encodeExpr (Min x)           = encFun1 "min" x
-encodeExpr (Max x)           = encFun1 "max" x
-encodeExpr (GroupConcat x s) = "group_concat(\{encodeExpr x}, \{s})"
+encodeExpr (COALESCE xs)     = encFun "coalesce" xs
+encodeExpr (COUNT x)         = encFun1 "count" x
+encodeExpr (AVG x)           = encFun1 "avg" x
+encodeExpr (SUM x)           = encFun1 "sum" x
+encodeExpr (MIN x)           = encFun1 "min" x
+encodeExpr (MAX x)           = encFun1 "max" x
+encodeExpr (GROUP_CONCAT x s) = "group_concat(\{encodeExpr x}, \{s})"
 
 encOp s x y =
   let sx := encodeExpr x

@@ -58,25 +58,25 @@ We can now define the commands for creating the two tables:
 export
 createUnits : Cmd TCreate
 createUnits =
-  createTable Units
-    [ PrimaryKey ["unit_id"]
-    , AutoIncrement "unit_id"
-    , ForeignKey Employees ["head"] ["employee_id"]
-    , NotNull "name"
-    , Unique ["name"]
+  CREATE_TABLE Units
+    [ PRIMARY_KEY ["unit_id"]
+    , AUTOINCREMENT "unit_id"
+    , FOREIGN_KEY Employees ["head"] ["employee_id"]
+    , NOT_NULL "name"
+    , UNIQUE ["name"]
     ]
 
 export
 createEmployees : Cmd TCreate
 createEmployees =
-  createTable Employees
-    [ PrimaryKey ["employee_id"]
-    , AutoIncrement "employee_id"
-    , ForeignKey Units ["unit_id"] ["unit_id"]
-    , NotNull "name"
-    , NotNull "salary"
-    , NotNull "unit_id"
-    , Check ("salary" > 0)
+  CREATE_TABLE Employees
+    [ PRIMARY_KEY ["employee_id"]
+    , AUTOINCREMENT "employee_id"
+    , FOREIGN_KEY Units ["unit_id"] ["unit_id"]
+    , NOT_NULL "name"
+    , NOT_NULL "salary"
+    , NOT_NULL "unit_id"
+    , CHECK ("salary" > 0)
     ]
 ```
 
@@ -195,10 +195,10 @@ unitStats : LQuery [String,Bits32,Double,Double,Double]
 unitStats =
   SELECT
     [ "u.name"
-    ,  Count "e.name" `AS` "num_employees"
-    ,  Avg "e.salary" `AS` "average_salary"
-    ,  Min "e.salary" `AS` "min_salary"
-    ,  Max "e.salary" `AS` "max_salary"
+    ,  COUNT "e.name" `AS` "num_employees"
+    ,  AVG "e.salary" `AS` "average_salary"
+    ,  MIN "e.salary" `AS` "min_salary"
+    ,  MAX "e.salary" `AS` "max_salary"
     ]
     [< FROM (Employees `AS` "e")
     ,  JOIN (Units `AS` "u") `USING` ["unit_id"]

@@ -26,9 +26,14 @@ public export %inline
 FromCellType : (0 a : Type) -> FromCell a => SqliteType
 FromCellType a = fromCellType {a}
 
+||| Utility for implementing `fromCell` for non-nullable data types.
+|||
+||| In case of a `Nothing` (corresponding to `NULL` in SQL land),
+||| this fails with a `NullPointer` error that wraps the type name
+||| to display, what kind of data we tried to convert.
 export
 decodeJust :
-     String
+     (type : String)
   -> (t -> Either SqlError a)
   -> Maybe t
   -> Either SqlError a

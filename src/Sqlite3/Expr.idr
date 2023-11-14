@@ -357,10 +357,6 @@ encodeText = go [<quote] . unpack
     go sc ('\'' :: xs) = go (sc :< quote :< quote) xs
     go sc (x    :: xs) = go (sc :< x) xs
 
-encBool : Bool -> String
-encBool True  = "1"
-encBool False = "0"
-
 ||| Encodes an SQL literal as a string.
 export
 encodeLit : (t : SqliteType) -> IdrisType t -> String
@@ -368,7 +364,6 @@ encodeLit BLOB x    = encodeBytes x
 encodeLit TEXT x    = encodeText x
 encodeLit INTEGER x = show x
 encodeLit REAL x    = show x
-encodeLit BOOL x    = encBool x
 
 encOp : String -> Expr s t -> Expr s t -> String
 

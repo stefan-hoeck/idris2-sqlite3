@@ -29,13 +29,13 @@ is reflected in the `Sqlite3.Types.SqliteType` enumeration: `INTEGER`
 for signed 64 bit integers, `REAL` for 64 bit floating point numbers,
 `TEXT`for strings of unicode characters, and `BLOB` for byte arrays.
 
-Data type `SqliteType` comes with a fifth value called `BOOL` for boolean
-values. In database tables, this is represented as an integer with `0`
+In addition, `BOOL` is defined as an alias for `INTEGER`.
+In database tables, this is represented as an integer with `0`
 corresponding to `False` and every other value (typically `1`) corresponding
-to `True`. Although this is not an official SQLite type, it helps with
-defining and typing predicate expressions as we will later see.
+to `True`. It has no effect on type safety or -inference, but it helps
+making the intention behind certain expressions clearer.
 
-Each of the five values of `SqliteType` corresponds to an Idris type,
+Each of the four values of `SqliteType` corresponds to an Idris type,
 to which values are converted when reading from and writing to the database.
 This is reflected in function `Sqlite3.Types.IdrisType` and summarized
 in the following table:
@@ -46,7 +46,6 @@ in the following table:
 | REAL        | Double     | 64 bit floating point number   |
 | TEXT        | String     | sequence of unicode characters |
 | BLOB        | ByteString | byte array                     |
-| BOOL        | Bool       | 64 bit signed integer          |
 
 All SQLite types are nullable, that is, `NULL` is a valid value in a column,
 unless the `NOT NULL` constraint has been set (see below). Therefore,

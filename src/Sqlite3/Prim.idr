@@ -325,10 +325,6 @@ sqlitePrepare s = withPtrAlloc $ \stmt_ptr => do
       | r => sqlFail r
     Right . S <$> dereference stmt_ptr
 
-%inline boolToInt : Bool -> Int64
-boolToInt True  = 1
-boolToInt False = 0
-
 bindParam : DB => Stmt -> Parameter -> IO Int
 bindParam s (P n t v) = do
   ix <- fromPrim $ prim__sqlite3_bind_parameter_index s.stmt n
@@ -336,7 +332,6 @@ bindParam s (P n t v) = do
     INTEGER => fromPrim $ prim__sqlite3_bind_int64 s.stmt ix v
     REAL    => fromPrim $ prim__sqlite3_bind_double s.stmt ix v
     TEXT    => fromPrim $ prim__sqlite3_bind_text s.stmt ix v
-    BOOL    => fromPrim $ prim__sqlite3_bind_int64 s.stmt ix (boolToInt v)
     BLOB    => do
       buf <- toBuffer v
       fromPrim $ prim__sqlite3_bind_blob s.stmt ix buf (cast v.size)

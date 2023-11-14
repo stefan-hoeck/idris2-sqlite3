@@ -103,9 +103,18 @@ data SqliteType : Type where
   TEXT    : SqliteType
   INTEGER : SqliteType
   REAL    : SqliteType
-  BOOL    : SqliteType
 
 %runElab derive "SqliteType" [Show,Eq,Ord]
+
+||| This is an alias for `INTEGER` that helps with making the intention
+||| behind certain SQL expressions clearer.
+|||
+||| SQLite does not have a native boolean type, so this is used
+||| as a reminder than some expression are used in accordance with
+||| boolean logic.
+public export %inline
+BOOL : SqliteType
+BOOL = INTEGER
 
 ||| Associates an `SqliteType` with the corresponding Idris type.
 public export
@@ -114,7 +123,6 @@ IdrisType BLOB    = ByteString
 IdrisType TEXT    = String
 IdrisType INTEGER = Int64
 IdrisType REAL    = Double
-IdrisType BOOL    = Bool
 
 --------------------------------------------------------------------------------
 --          Error Type

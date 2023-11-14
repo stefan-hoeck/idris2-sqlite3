@@ -8,7 +8,6 @@ Idris types. We start with the necessary imports:
 ```idris
 module Tutorial
 
-import Data.WithID
 import Data.String
 import Derive.Sqlite3
 import Control.RIO.Sqlite3
@@ -252,7 +251,7 @@ none of them explained in detail how everything worked
 and why these libraries were implemented the way they are.
 
 At least in our case, the implementation is not very hard to
-understand, if you know about two core concepts in Idris: Unification
+understand if you know about two core concepts in Idris: Unification
 and proof search.
 
 ### Looking up Table Columns
@@ -266,7 +265,8 @@ function called `ListColType`, which does the same thing by invoking
 returns a `Just` for the current column name and list of columns.
 
 This is the core design decision behind name resolution in this
-library: Instead of using an inductive type such as `Elem` for lists
+library: Instead of using an inductive type such as `Elem` from
+`Data.List.Elem` in base
 for proving that a value is present in a container, we define
 a lookup function that returns a `Nothing` in case the lookup fails.
 This decision has two consequences, one good and the other rather
@@ -351,7 +351,7 @@ on the right.
 
 It is paramount that all of the above works smoothly
 in order to get nice and concise syntax when defining SQL expressions
-and commands. The good new is that not a lot of complexity
+and commands. The good news is that not a lot of complexity
 is involved here: Understanding how `fromString` works for
 `TColumn` as well as `Expr` - both are implemented via
 the same technique - makes everything else fall into place.
@@ -572,7 +572,7 @@ Neat. Let me finish this subsection with some notes:
   known at compile time.
 * One might wonder why we did not add a second parameter to the
   `ToCell` and `FromCell` interfaces instead of returning the
-  SQLite from an interface function. I tried both variants, but it turned
+  SQLite type from an interface function. I tried both variants, but it turned
   out that type inference works *much* better with single-parameter
   interfaces, even when only one parameter is used for interface
   resolution. In addition, single-parameter interfaces work well with the
@@ -610,7 +610,7 @@ record Student where
 
 The interfaces required to convert record types from and to table rows
 can also be found in `Sqlite3.Marshall` and are called `FromRow` and
-`ToRow`. Just like `FromCell` and `ToCell`, the come with two
+`ToRow`. Just like `FromCell` and `ToCell`, they come with two
 functions: One for specifying the type(s) at the database side, the
 other for performing the actual conversion. Here are the implementations
 for `Student`:
@@ -709,7 +709,7 @@ name with an Idris type that converts to the correct SQLite type.
 See data type `Val` in module `Sqlite3.Cmd` and the associated
 operator `(.=)` for the details.
 
-However, once thing we avoided discussing so far are SQL expressions,
+However, one thing we avoided discussing so far are SQL expressions,
 although we already have seen several of them. Let's look at those
 next.
 
@@ -728,7 +728,7 @@ operators and all-caps data constructors correspond more or less
 directly to similar operators and functions in SQL, with certain
 operators being more on the Idris side of things (for instance
 `(&&)` instead of `AND` and `(||)` instead of `OR`
-for boolean conjunctions and disjunctions).
+for boolean conjunction and disjunction).
 
 As with other types we have seen so far, `Expr s t` comes with a
 `fromString` function for referencing (possibly qualified) columns
@@ -756,23 +756,23 @@ expressions and statements.
 
 In general, it is advisable to not insert literal values directly
 into SQL statements and expressions. Instead, SQLite accepts syntax
-for adding parameters to SQL code, which can then be set using
-the C-API. This has several advantages:
+for adding parameters to SQL code, which can then be bound to the
+corresponding values using the C-API. This has several advantages:
 
 * Performance: Converting a literal to a string to be included
   in an SQL command just to have it be read back by the SQL
-  parser, is inefficient, especially, if we are talking about
-  lengthy string or byte vector literals.
+  parser is inefficient, especially so, if we are talking about
+  literals for lengthy strings or byte vectors.
 * Security: Inserting unsanitized string literals into an SQL
   command poses a security risk. A specially crafted string literal
   could be used to change the meaning and behavior of a piece
-  of SQL if care is not taken to properly sanitize it first.
+  of SQL code if care is not taken to properly sanitize it first.
   Function `Sqlite3.Expr.encodeExpr` takes care of this by
-  properly escaping string literals, but that's all in terms of
-  sanity checks we currently perform. Going via the C-API
+  properly escaping single quotes in string literals, but that's all we
+  currently perform in terms of sanity checks. Going via the C-API
   avoids the need to sanitize string literals altogether.
 
-For the reasons presented above, module `Sqlite3.Parameter` is provided
+For the reasons listed above, module `Sqlite3.Parameter` is provided
 for encoding the SQL commands and expressions we have seen so far
 by properly inserting parameters into the generated SQL code
 and accumulating a list of `Parameter`s to be bound before
@@ -882,7 +882,7 @@ problems =
 points : List (HList [Bits32,Bits32,Double])
 ```
 
-We can used these lists of data to generate and populate our
+We can use these lists of data to generate and populate our
 tables. For this we use the `Control.RIO.Sqlite3.cmds` utility,
 which takes an argument of type `Cmds` (a specialized list
 for grouping commands independent of their type index).
@@ -912,20 +912,21 @@ the list `es` of error types in the type of `populateDB` must contain
 the `SqlError` type, which is witnessed by the `Has SqlError es` proof.
 If you are writing many actions operating against an SQLite database,
 it can be convenient to move these two auto-implicit arguments to
-a `parameters` block (see the source code of `Control.RIO.Sqlite3` where
-this has been done with the `Has SqlError es` proof).
+a `parameters` block. As an example, see the source code of
+`Control.RIO.Sqlite3` where this has been done with the `Has SqlError es`
+proof.
 
-Just one more note abound `cmds`: This `IO` action will run all
+Just one more note about `cmds`: This `IO` action will run all
 commands in the list in a single transaction, which will be rolled back
 as a whole in case one of the commands fails with an error.
 
 ## Queries
 
-We are almost ready now to run our example application. Before we do that,
+We are almost ready to run our example application. Before we do that,
 however, we need to define a bunch of queries and use SQLite for its
-main purpose: Querying, accumulating, and analyzing data.
+main purpose: Collecting, filtering, accumulating, and analyzing data.
 
-Just like with `Cmd` there is dependent data type called `Query`
+Just like with `Cmd` there is a dependent data type called `Query`
 for assembling queries with some sanity checking, which we can
 encode as an SQL string together with a list of parameters.
 
@@ -982,20 +983,21 @@ of `Student` it can figure out that we need to collect two columns,
 both of which hold values of type `TEXT`. The two columns in question
 reference the given schema, which is now `[< Students]` (this is, again,
 derived from the second argument). Remember that we can use the unqualified
-column name when there is only one table in the schema.
-
+column names when there is only one table in the schema.
 As shown in earlier sections, Idris will figure out the SQL type
 associated with each column name it successfully resolves.
 
 Just a minor detail: The reason why we use snoclist syntax for the
-`From` datatype and in schemata,
-is that the schema in a sequence of joins is naturally
+`From` datatype and in schemata is,
+that the schema in a sequence of joins is naturally
 assembled from left to right. We will look at joins in the
 next subsection.
 
 We might want to keep only certain students and properly sort them
 as well, because otherwise the order in which they are returned
-is quite arbitrary. Here's how to do that:
+is quite arbitrary. In the next example, we are only interested in
+students with an invalid email domain, and we sort them by name
+is ascending order.
 
 ```idris
 invalidEmail : Query Student
@@ -1028,7 +1030,7 @@ invalidPoints =
   `WHERE` ("sp.points" > "p.points")
 ```
 
-This example demonstrates, how the schema we operate on in a `SELECT`
+This example demonstrates how the schema we operate on in a `SELECT`
 statement is given by the tables we use in the `FROM` part of
 the statement: Since we are joining three tables, these tables
 make up the schema in order of appearance. To declutter the qualified
@@ -1043,8 +1045,7 @@ With this example we also learn how to correctly assemble a
 values, a data type with several constructors each corresponding
 to one type of `JOIN` in SQL, with the exception of constructor
 `FROM`, which can only be used for the first table in the schema.
-
-Again, I strongly suggest at how `Join` and `From` are typed, and
+Again, I strongly suggest you look at how `Join` and `From` are typed, and
 where utility functions such as `USING` come into play. All of this
 is achieved just with properly crafted dependent types.
 
@@ -1124,13 +1125,20 @@ totPoints =
 ```
 
 Here, we generate all student-problem pairs with a `CROSS JOIN`, associate
-them with the corresponding exam (an `INNER_JOIN`) and add the
+them with the corresponding exam (an `INNER_JOIN`) and sum up the
 points each student got in a problem. For the last step, we use an
 `OUTER JOIN`, so that student-problem combos without points have a
 `NULL` entry in the `sp.points` column. We then aggregate everything
-per student and exam, and we filter out student with not all points
-in specified yet in an exam. For this, we replace `NULL` entries with
-a negative number and make sure the minimal value is non-negative.
+per student and exam, and we filter out student with still unmarked
+problems in an exam. For this, we replace `NULL` entries with
+a negative number and make sure the minimal value in the aggregate
+is non-negative.
+
+Please note, how we can reference named columns in the list of
+returned columns in the `HAVING` and `GROUP_BY` parts of the query:
+The schema these sections work on not only contains the tables from
+then sequence of joins but also an unnamed table holding the
+named columns from the list of column expressions.
 
 Finally, we also want to list only the students who failed the exam, which
 we assume happen, if they have fewer than half of the points:
@@ -1144,7 +1152,7 @@ failed = totPoints `HAVING` ("ex_points" < "total" / 2)
 
 The last thing to do is to run the application. We define a
 function for printing a warning for those student-problem
-combinations that have not yet been marked.
+combinations that have not yet been marked:
 
 ```idris
 warnPoints : HList [String,String,Double,Double] -> App es ()
@@ -1168,8 +1176,10 @@ queries and print their results:
 app : App [SqlError] ()
 app =
   withDB ":memory:" $ do
-    putStrLn "Populating the database\n"
+    putStrLn "Populating the database"
     populateDB
+
+    putStrLn "\nMissing problem points"
     ips <- query invalidPoints 1000
     traverse_ warnPoints ips
 

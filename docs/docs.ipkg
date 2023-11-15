@@ -8,3 +8,4 @@ sourcedir = "src"
 
 modules = README
         , Tutorial
+        , Marshall

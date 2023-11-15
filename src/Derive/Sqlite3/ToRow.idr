@@ -10,24 +10,17 @@ import Language.Reflection.Util
 --          Claims
 --------------------------------------------------------------------------------
 
-cellTypes : Vect n Name -> ParamCon n -> TTImp
-cellTypes vs (MkParamCon _ _ args) = foldr acc `(Prelude.Nil) args
+rowsTypes : Vect n Name -> ParamCon n -> TTImp
+rowsTypes vs (MkParamCon _ _ args) = foldr acc `(Prelude.Nil) args
   where
     acc : ConArg n -> TTImp -> TTImp
-    acc (CArg _ MW _ t) s = `(Prelude.(::) (ToCellType ~(ttimp vs t)) ~(s))
+    acc (CArg _ MW _ t) s = `(Prelude.List.(++) (ToRowTypes ~(ttimp vs t)) ~(s))
     acc _               s = s
 
 ||| Top-level declaration of the `ToCell` implementation for the given data type.
 export
-toRowImplClaim :
-     (impl : Name)
-  -> (p : ParamTypeInfo)
-  -> (ParamCon p.numParams)
-  -> Decl
-toRowImplClaim impl p c =
-  let tpe := var "ToRow" `app` p.applied
-      pi  := piAll tpe (allImplicits p "ToCell")
-   in implClaim impl pi
+toRowImplClaim : (impl : Name) -> (p : ParamTypeInfo) -> Decl
+toRowImplClaim impl p = implClaim impl (implType "ToRow" p)
 
 --------------------------------------------------------------------------------
 --          Definitions
@@ -37,7 +30,7 @@ appList : SnocList TTImp -> TTImp
 appList = foldr acc `(Data.List.Quantifiers.All.Nil)
   where
     acc : TTImp -> TTImp -> TTImp
-    acc t s = `(Data.List.Quantifiers.All.(::) ~(t) ~(s))
+    acc t s = `(Sqlite3.Marshall.(++) ~(t) ~(s))
 
 x : Name
 x = "x"
@@ -52,7 +45,7 @@ parameters (nms : List Name)
 
   toRowClause : Con n vs -> Clause
   toRowClause =
-    accumArgs regular id appList (\(BA _ [x] _) => `(toCell ~(varStr x)))
+    accumArgs regular id appList (\(BA _ [x] _) => `(toRow ~(varStr x)))
 
   to : Con n vs -> TTImp
   to c =
@@ -74,7 +67,6 @@ ToRow nms p =
   case (p.cons, p.info.cons) of
     ([c],[d]) =>
       let impl     := implName p "ToRow"
-          rowTypes := cellTypes p.paramNames c
-       in Right [ TL (toRowImplClaim impl p c) (toRowDef nms impl rowTypes d) ]
+          rowTypes := rowsTypes p.paramNames c
+       in Right [ TL (toRowImplClaim impl p) (toRowDef nms impl rowTypes d) ]
     _   => failRecord "ToRow"
-

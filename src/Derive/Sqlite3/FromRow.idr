@@ -1,5 +1,6 @@
 module Derive.Sqlite3.FromRow
 
+import Derive.Sqlite3.ToRow
 import Sqlite3.Marshall
 import Sqlite3.Types
 import Language.Reflection.Util
@@ -10,41 +11,35 @@ import Language.Reflection.Util
 --          Claims
 --------------------------------------------------------------------------------
 
-cellTypes : Vect n Name -> ParamCon n -> TTImp
-cellTypes vs (MkParamCon _ _ args) = foldr acc `(Prelude.Nil) args
+flatTypes : Vect n Name -> ParamCon n -> TTImp
+flatTypes vs (MkParamCon _ _ args) = foldr acc `(Prelude.Nil) args
   where
     acc : ConArg n -> TTImp -> TTImp
-    acc (CArg _ MW _ t) s = `(Prelude.(::) (FromCellType ~(ttimp vs t)) ~(s))
+    acc (CArg _ MW _ t) s = `(Prelude.List.(++) (FromRowTypes ~(ttimp vs t)) ~(s))
+    acc _               s = s
+
+rowsTypes : Vect n Name -> ParamCon n -> TTImp
+rowsTypes vs (MkParamCon _ _ args) = foldr acc `(Prelude.Nil) args
+  where
+    acc : ConArg n -> TTImp -> TTImp
+    acc (CArg _ MW _ t) s = `(Prelude.(::) (FromRowTypes ~(ttimp vs t)) ~(s))
     acc _               s = s
 
 ||| Top-level declaration of the `FromCell` implementation for the given data type.
 export
-fromRowImplClaim :
-     (impl : Name)
-  -> (p : ParamTypeInfo)
-  -> (ParamCon p.numParams)
-  -> Decl
-fromRowImplClaim impl p c =
-  let tpe := var "FromRow" `app` p.applied
-      pi  := piAll tpe (allImplicits p "FromCell")
-   in implClaim impl pi
+fromRowImplClaim : (impl : Name) -> (p : ParamTypeInfo) -> Decl
+fromRowImplClaim impl p = implClaim impl (implType "FromRow" p)
 
 --------------------------------------------------------------------------------
 --          Definitions
 --------------------------------------------------------------------------------
-
-appList : SnocList TTImp -> TTImp
-appList = foldr acc `(Data.List.Quantifiers.All.Nil)
-  where
-    acc : TTImp -> TTImp -> TTImp
-    acc t s = `(Data.List.Quantifiers.All.(::) ~(t) ~(s))
 
 x : Name
 x = "x"
 
 matchEither : String -> (res : TTImp) -> String -> TTImp
 matchEither x res y =
-  `(case fromCell ~(varStr x) of
+  `(case fromRow ~(varStr x) of
      Right ~(bindVar y) => ~(res)
      Left e             => Left e)
 
@@ -68,13 +63,17 @@ parameters (nms : List Name)
         applied := appAll c.name (map (\(BA _ [_,y] _) => varStr y) args <>> [])
      in patClause (fromLHS args) (fromRHS args $ app `(Right) applied)
 
-  from : Con n vs -> TTImp
-  from c =
-    lam (lambdaArg x) $ iCase (var x) implicitFalse [fromRowClause c]
+  from : TTImp -> Con n vs -> TTImp
+  from rowTypes c =
+    lam (lambdaArg x) $
+      iCase
+        `(splitAll ~(rowTypes) ~(var x))
+        implicitFalse
+        [fromRowClause c]
 
-  fromRowDef : Name -> (rowTypes : TTImp) -> Con n vs -> Decl
-  fromRowDef f rowTypes c =
-    def f [patClause (var f) `(MkFromRow ~(rowTypes) ~(from c))]
+  fromRowDef : Name -> (ft,rt : TTImp) -> Con n vs -> Decl
+  fromRowDef f ft rt c =
+    def f [patClause (var f) `(MkFromRow ~(ft) ~(from rt c))]
 
 --------------------------------------------------------------------------------
 --          Deriving
@@ -88,6 +87,7 @@ FromRow nms p =
   case (p.cons, p.info.cons) of
     ([c],[d]) =>
       let impl     := implName p "FromRow"
-          rowTypes := cellTypes p.paramNames c
-       in Right [ TL (fromRowImplClaim impl p c) (fromRowDef nms impl rowTypes d) ]
+          ft       := flatTypes p.paramNames c
+          rt       := rowsTypes p.paramNames c
+       in Right [ TL (fromRowImplClaim impl p) (fromRowDef nms impl ft rt d) ]
     _   => failRecord "FromRow"

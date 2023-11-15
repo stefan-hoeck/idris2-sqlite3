@@ -1,8 +1,9 @@
 module Sqlite3.Marshall
 
 import Data.Buffer.Indexed
-import public Data.List.Quantifiers
+import Data.Vect
 import Sqlite3.Types
+import public Data.List.Quantifiers
 
 %default total
 
@@ -209,35 +210,73 @@ interface FromRow a where
   fromRowTypes : List SqliteType
   fromRow      : LAll (Maybe . IdrisType) fromRowTypes -> Either SqlError a
 
+public export
+FromCell a => FromRow a where
+  fromRowTypes = [FromCellType a]
+  fromRow [v]  = fromCell v
+
 ||| Utility alias for `fromRowTypes` with an explicit erased type argument.
 public export %inline
 FromRowTypes : (0 a : Type) -> FromRow a => List SqliteType
 FromRowTypes a = fromRowTypes {a}
 
-||| Computes a list of SQLite types from a list of `FromCell` implementations.
+||| List of SQLite types we require to read a sequence of
+||| several values with a `FromRow` implementation.
 public export
-FromCellTypes : LAll (FromCell . f) ts -> List SqliteType
-FromCellTypes []        = []
-FromCellTypes (p :: ps) = fromCellType @{p} :: FromCellTypes ps
+FromRowsTypes : LAll (FromRow . f) ts -> List SqliteType
+FromRowsTypes []        = []
+FromRowsTypes (x :: xs) = fromRowTypes @{x} ++ FromRowsTypes xs
 
 fromRowImpl :
-     (ps : LAll (FromCell . f) ts)
-  -> LAll (Maybe . IdrisType) (FromCellTypes ps)
-  -> Either SqlError (All f ts)
-fromRowImpl []      []      = Right []
-fromRowImpl (p::ps) (v::vs) =
-  let Right x  := fromCell v        | Left err => Left err
-      Right xs := fromRowImpl ps vs | Left err => Left err
-   in Right (x::xs)
+     (ps : LAll (FromRow . f) ts)
+  -> LAll (Maybe . IdrisType) (FromRowsTypes ps)
+  -> Either SqlError (LAll f ts)
+fromRowImpl []        [] = Right []
+fromRowImpl (p :: ps) xs =
+  let (qs,rs)  := splitAt (fromRowTypes @{p}) xs
+      Right v  := fromRow @{p} qs   | Left err => Left err
+      Right vs := fromRowImpl ps rs | Left err => Left err
+   in Right (v::vs)
 
-export
-{0 f : k -> Type} -> (ps : LAll (FromCell . f) ts) => FromRow (LAll f ts) where
-  fromRowTypes = FromCellTypes ps
+public export
+{0 f : k -> Type} -> (ps : LAll (FromRow . f) ts) => FromRow (LAll f ts) where
+  fromRowTypes = FromRowsTypes ps
   fromRow      = fromRowImpl ps
+
+||| We can also convert a row of values to a vector of values.
+|||
+||| This function computes the types we need.
+public export
+FromRowsTypesN : Nat -> FromRow a -> List SqliteType
+FromRowsTypesN 0     p = []
+FromRowsTypesN (S k) p = fromRowTypes @{p} ++ FromRowsTypesN k p
+
+fromRowVectImpl :
+     (n : Nat)
+  -> (p : FromRow a)
+  -> LAll (Maybe . IdrisType) (FromRowsTypesN n p)
+  -> Either SqlError (Vect n a)
+fromRowVectImpl 0     p [] = Right []
+fromRowVectImpl (S k) p xs =
+  let (qs,rs)  := splitAt (fromRowTypes @{p}) xs
+      Right v  := fromRow @{p} qs        | Left err => Left err
+      Right vs := fromRowVectImpl k p rs | Left err => Left err
+   in Right (v::vs)
+
+public export
+{n : _} -> (p : FromRow a) => FromRow (Vect n a) where
+  fromRowTypes = FromRowsTypesN n p
+  fromRow      = fromRowVectImpl n p
 
 --------------------------------------------------------------------------------
 -- ToRow
 --------------------------------------------------------------------------------
+
+||| Concatenation of heterogeneous lists
+public export
+(++) : LAll f xs -> LAll f ys -> LAll f (xs ++ ys)
+(++) []        qs = qs
+(++) (p :: ps) qs = p :: (ps ++ qs)
 
 ||| Inteface for converting an Idris value from a row in a table.
 public export
@@ -246,24 +285,82 @@ interface ToRow a where
   toRowTypes : List SqliteType
   toRow      : a -> LAll (Maybe . IdrisType) toRowTypes
 
+public export
+ToCell a => ToRow a where
+  toRowTypes = [ToCellType a]
+  toRow v    = [toCell v]
+
 ||| Utility alias for `fromRowTypes` with an explicit erased type argument.
 public export %inline
 ToRowTypes : (0 a : Type) -> ToRow a => List SqliteType
 ToRowTypes a = toRowTypes {a}
 
+||| List of SQLite types we require to read a sequence of
+||| several values with a `ToRow` implementation.
 public export
-ToCellTypes : LAll (ToCell . f) ts -> List SqliteType
-ToCellTypes []        = []
-ToCellTypes (p :: ps) = toCellType @{p} :: ToCellTypes ps
+ToRowsTypes : LAll (ToRow . f) ts -> List SqliteType
+ToRowsTypes []        = []
+ToRowsTypes (p :: ps) = toRowTypes @{p} ++ ToRowsTypes ps
 
 toRowImpl :
-     (ps : LAll (ToCell . f) ts)
+     (ps : LAll (ToRow . f) ts)
   -> LAll f ts
-  -> LAll (Maybe . IdrisType) (ToCellTypes ps)
+  -> LAll (Maybe . IdrisType) (ToRowsTypes ps)
 toRowImpl []      []      = []
-toRowImpl (p::ps) (v::vs) = toCell v :: toRowImpl ps vs
+toRowImpl (p::ps) (v::vs) = toRow v ++ toRowImpl ps vs
 
-export
-{0 f : k -> Type} -> (ps : LAll (ToCell . f) ts) => ToRow (LAll f ts) where
-  toRowTypes = ToCellTypes ps
+public export
+{0 f : k -> Type} -> (ps : LAll (ToRow . f) ts) => ToRow (LAll f ts) where
+  toRowTypes = ToRowsTypes ps
   toRow      = toRowImpl ps
+
+||| We can also convert a vector of values to a (flat) row of values.
+|||
+||| This function computes the types we need.
+public export
+ToRowsTypesN : Nat -> ToRow a -> List SqliteType
+ToRowsTypesN 0     p = []
+ToRowsTypesN (S k) p = toRowTypes @{p} ++ ToRowsTypesN k p
+
+toRowVectImpl :
+     (n : Nat)
+  -> (p : ToRow a)
+  -> Vect n a
+  -> LAll (Maybe . IdrisType) (ToRowsTypesN n p)
+toRowVectImpl 0     p []      = []
+toRowVectImpl (S k) p (v::vs) = toRow @{p} v ++ toRowVectImpl k p vs
+
+public export
+{n : _} -> (p : ToRow a) => ToRow (Vect n a) where
+  toRowTypes = ToRowsTypesN n p
+  toRow      = toRowVectImpl n p
+
+record Foo where
+  constructor F
+  vect : Vect 3 String
+  bool : Bool
+  int  : Bits32
+
+ToRow Foo where
+  toRowTypes      = ToRowTypes (Vect 3 String) ++ ToRowTypes Bool ++ ToRowTypes Bits32
+  toRow (F v b c) = toRow v ++ toRow b ++ toRow c
+
+||| List concatenation specialized to behave nicely during unification.
+public export
+Concat : List (List a) -> List a
+Concat []        = []
+Concat (x :: xs) = x ++ Concat xs
+
+||| Generalization of `Data.List.Quantifiers.splitAt`, to split a
+||| heterogeneous list based on a list of lists of its indices.
+public export
+splitAll : (v : List (List a)) -> LAll f (Concat v) -> LAll (LAll f) v
+splitAll []          [] = []
+splitAll (xs :: xss) ys =
+  let (zs,r) := splitAt xs ys
+   in zs :: splitAll xss r
+
+FromRow Foo where
+  fromRowTypes      = FromRowTypes (Vect 3 String) ++ FromRowTypes Bool ++ FromRowTypes Bits32
+  fromRow xs        = case splitAll [FromRowTypes (Vect 3  String), FromRowTypes Bool, FromRowTypes Bits32] xs of
+    [x,y,z] => [| F (fromRow x) (fromRow y) (fromRow z) |]

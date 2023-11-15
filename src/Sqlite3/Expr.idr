@@ -309,41 +309,6 @@ export
 commaSep : (a -> String) -> List a -> String
 commaSep f = concat . intersperse ", " . map f
 
-hexChar : Bits8 -> Char
-hexChar 0 = '0'
-hexChar 1 = '1'
-hexChar 2 = '2'
-hexChar 3 = '3'
-hexChar 4 = '4'
-hexChar 5 = '5'
-hexChar 6 = '6'
-hexChar 7 = '7'
-hexChar 8 = '8'
-hexChar 9 = '9'
-hexChar 10 = 'a'
-hexChar 11 = 'b'
-hexChar 12 = 'c'
-hexChar 13 = 'd'
-hexChar 14 = 'e'
-hexChar _  = 'f'
-
-%inline quote : Char
-quote = '\''
-
-||| Encodes a `ByteString` as an SQL literal.
-|||
-||| Every byte is encodec with two hexadecimal digits, and the
-||| whole string is wrapped in single quotes prefixed with an "X".
-|||
-||| For instance, `encodeBytes (fromList [0xa1, 0x77])` yields the
-||| string "X'a177'".
-export
-encodeBytes : ByteString -> String
-encodeBytes = pack . (\x => 'X'::quote::x) . foldr acc [quote]
-  where
-    %inline acc : Bits8 -> List Char -> List Char
-    acc b cs = hexChar (b `shiftR` 4) :: hexChar (b .&. 0xf) :: cs
-
 ||| Encodes a `String` as an SQL literal.
 |||
 ||| The whole string is wrapped in single quotes. Single quotes withing

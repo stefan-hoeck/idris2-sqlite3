@@ -63,6 +63,7 @@ First, let's define the table for students. We keep this very
 basic:
 
 ```idris
+public export
 Students : Table
 Students =
   table "students"
@@ -83,6 +84,7 @@ tables.
 Here are the other tables we are going to use:
 
 ```idris
+public export
 Problems : Table
 Problems =
   table "problems"
@@ -91,6 +93,7 @@ Problems =
     , C "problem_text" TEXT
     ]
 
+public export
 Exams : Table
 Exams =
   table "exams"
@@ -100,6 +103,7 @@ Exams =
     , C "year"         INTEGER
     ]
 
+public export
 ExamProblems : Table
 ExamProblems =
   table "exam_problems"
@@ -107,6 +111,7 @@ ExamProblems =
     , C "exam_id"      INTEGER
     ]
 
+public export
 StudentProblems : Table
 StudentProblems =
   table "student_problems"
@@ -134,6 +139,7 @@ create tables and insert, update, or delete rows.
 Here's the command for creating the `students` table:
 
 ```idris
+public export
 createStudents : Cmd TCreate
 createStudents =
   IF_NOT_EXISTS $ CREATE_TABLE Students
@@ -184,6 +190,7 @@ and then we'll have a closer look at how table and column names
 are resolved at compile time.
 
 ```idris
+public export
 createExams : Cmd TCreate
 createExams =
   IF_NOT_EXISTS $ CREATE_TABLE Exams
@@ -194,6 +201,7 @@ createExams =
     , NOT_NULL      "year"
     ]
 
+public export
 createProblems : Cmd TCreate
 createProblems =
   IF_NOT_EXISTS $ CREATE_TABLE Problems
@@ -204,6 +212,7 @@ createProblems =
     , CHECK         ("points" > 0)
     ]
 
+public export
 createExamProblems : Cmd TCreate
 createExamProblems =
   IF_NOT_EXISTS $ CREATE_TABLE ExamProblems
@@ -212,6 +221,7 @@ createExamProblems =
     , FOREIGN_KEY Exams ["exam_id"] ["exam_id"]
     ]
 
+public export
 createStudentProblems : Cmd TCreate
 createStudentProblems =
   IF_NOT_EXISTS $ CREATE_TABLE StudentProblems
@@ -484,6 +494,7 @@ Idris value to an SQLite value. Here's an example implementation: We
 are going to define an enum type for the topics of our exams:
 
 ```idris
+public export
 data Topic : Type where
   OrganicChemistry   : Topic
   Cheminformatics    : Topic
@@ -492,6 +503,7 @@ data Topic : Type where
 
 %runElab derive "Topic" [Show,Eq,Ord]
 
+public export
 ToCell Topic where
   toCellType = TEXT
 
@@ -515,6 +527,7 @@ as part of our database queries:
 
 
 ```idris
+public export
 FromCell Topic where
   fromCellType = TEXT
 
@@ -543,12 +556,14 @@ well as for enumeration types, which will just use the constructor
 name when being converted. Here's an example:
 
 ```idris
+public export
 data Term : Type where
   SS : Term    -- spring semester
   AS : Term    -- autumn semester
 
 %runElab derive "Term" [Show,Eq,Ord,ToCell,FromCell]
 
+public export
 record Email where
   constructor MkEmail
   email : String
@@ -1073,8 +1088,7 @@ aggregate functions and how to reference aggregate columns in the
 `ORDER BY` and `HAVING` parts of a query.
 
 We first define a data type for generating summaries over all students
-and all exams. This comes with a simple pretty printer to get nice tabular
-output:
+and all exams:
 
 ```idris
 record Summary where
@@ -1087,13 +1101,6 @@ record Summary where
   tot     : Double
 
 %runElab derive "Summary" [Show,Eq,ToRow,FromRow]
-
-Interpolation Summary where
-  interpolate (MkSummary to te y n ps tot) =
-    let ts   := padRight 20 ' ' (show to)
-        ns   := padRight 10 ' ' n
-        tots := padLeft 4 ' ' (show ps)
-     in "\{ts}\{show te}\{show y} \{ns}: \{tots} / \{show tot}"
 ```
 
 We are now going to compute the number of points each student got
@@ -1180,23 +1187,23 @@ app =
 
     putStrLn "\nMissing problem points"
     ips <- query invalidPoints 1000
-    traverse_ warnPoints ips
+    putStrLn $ printRows ips
 
     putStrLn "\nInvalid email addresses"
     email <- query invalidEmail 1000
-    traverse_ printLn email
+    putStrLn $ printRows email
 
     putStrLn "\nStudent-problem combos without points:"
     nps <- query noPointsYet 1000
-    traverse_ printLn nps
+    putStrLn $ printRows nps
 
     putStrLn "\nPoints per student and exam:"
     tot <- query totPoints 1000
-    traverse_ (putStrLn . interpolate) tot
+    putStrLn $ printRows tot
 
     putStrLn "\nFailed exams:"
     failed <- query failed 1000
-    traverse_ (putStrLn . interpolate) failed
+    putStrLn $ printRows failed
 ```
 
 All that's left to do is to provide the actual `main` function.

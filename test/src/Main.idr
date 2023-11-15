@@ -57,19 +57,32 @@ app = withDB ":memory:" $ do
     , insertEmployee $ E "Ronja" 4010.0 1
     ] ++ fromList (insertFile . file <$> [0..255])
   ms <- query (mol TRUE) 1000
-  traverse_ printLn ms
+  putStrLn $ printRows ms
+  putStrLn ""
+
   fs <- query (file TRUE `LIMIT` 20) 1000
   traverse_ (putStrLn . encodeBytes . content . value) fs
+  putStrLn ""
+
   es <- query employee 1000
-  traverse_ printLn es
+  putStrLn $ printRows es
+  putStrLn ""
+
   hs <- query heads 1000
-  traverse_ printLn hs
+  putStrLn $ printRows hs
+  putStrLn ""
+
   ts <- query tuples 1000
-  traverse_ printLn ts
+  putStrLn $ printRows ts
+  putStrLn ""
+
   ps <- query nonHeads 1000
-  traverse_ printLn ps
+  putStrLn $ printRows ps
+  putStrLn ""
+
   ss <- query unitStats 1000
-  traverse_ printLn ss
+  putStrLn $ printRows ss
+  putStrLn ""
 
 main : IO ()
 main = runApp handlers app

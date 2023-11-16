@@ -4,9 +4,17 @@ import public Data.List1
 import public Data.Maybe
 import public Data.SnocList
 import public Data.String
+import Data.Bits
+import Data.Buffer.Indexed
+import Data.ByteString
+import Sqlite3.Marshall
 import Sqlite3.Types
 
 %default total
+
+--------------------------------------------------------------------------------
+-- SQL Columns and Tables
+--------------------------------------------------------------------------------
 
 ||| A column in an SQLite table: A name paired with the type of
 ||| values stored in the column.
@@ -22,8 +30,8 @@ record Column where
 
 ||| An SQLite table: A name paired with a list of columns.
 public export
-record Table where
-  constructor T
+record SQLTable where
+  constructor ST
   ||| The table's name
   name : String
 
@@ -37,8 +45,8 @@ record Table where
 ||| Utility constructor for tables that sets fields `name` and `as`
 ||| both the value of the string argument.
 public export %inline
-table : String -> List Column -> Table
-table n = T n n
+table : String -> List Column -> SQLTable
+table n = ST n n
 
 ||| Utility to change the name of a table in a `SELECT` statement.
 |||
@@ -49,12 +57,12 @@ table n = T n n
 ||| students `AS` "st"
 ||| ```
 public export %inline
-AS : Table -> String -> Table
-AS (T n _ cs) as = T n as cs
+AS : SQLTable -> String -> SQLTable
+AS (ST n _ cs) as = ST n as cs
 
 ||| Computes the types of columns stored in a table.
 public export %inline
-ColTypes : Table -> List SqliteType
+ColTypes : SQLTable -> List SqliteType
 ColTypes = map type . cols
 
 ||| Tries to look up a column type by name
@@ -87,18 +95,22 @@ ListColType s cs = fromJust (FindCol s cs)
 public export %inline
 TableColType :
      (s        : String)
-  -> (t        : Table)
+  -> (t        : SQLTable)
   -> {auto 0 p : IsJust (FindCol s t.cols)}
   -> SqliteType
 TableColType s t = fromJust (FindCol s t.cols)
+
+--------------------------------------------------------------------------------
+-- Typed SQL Columns
+--------------------------------------------------------------------------------
 
 ||| A column in the given table: This is just a column name
 ||| paired with a proof that the column exists in table `t`
 ||| and has type `tpe`.
 public export
-data TColumn : (t : Table) -> (tpe : SqliteType) -> Type where
+data TColumn : (t : SQLTable) -> (tpe : SqliteType) -> Type where
   TC :
-       {0 t        : Table}
+       {0 t        : SQLTable}
     -> (name       : String)
     -> {auto 0 prf : IsJust (FindCol name t.cols)}
     -> TColumn t (TableColType name t)
@@ -111,11 +123,15 @@ public export %inline
 namespace TColumn
   public export %inline
   fromString :
-       {0 t      : Table}
+       {0 t      : SQLTable}
     -> (name     : String)
     -> {auto 0 p : IsJust (FindCol name t.cols)}
     -> TColumn t (TableColType name t)
   fromString = TC
+
+--------------------------------------------------------------------------------
+-- Schemata
+--------------------------------------------------------------------------------
 
 ||| A database schema is a (snoc-)list of tables.
 |||
@@ -125,7 +141,7 @@ namespace TColumn
 ||| join statement than the other way round.
 public export
 0 Schema : Type
-Schema = SnocList Table
+Schema = SnocList SQLTable
 
 ||| Looks up a table and column name in a schema.
 |||
@@ -156,9 +172,9 @@ FindSchemaCol2 t c (sx :< x) =
 ||| the schema.
 public export
 FindSchemaCol1 : String -> Schema -> Maybe SqliteType
-FindSchemaCol1 n [< t]           = FindCol n t.cols
-FindSchemaCol1 n (_:<T "" "" cs) = FindCol n cs
-FindSchemaCol1 n _               = Nothing
+FindSchemaCol1 n [< t]             = FindCol n t.cols
+FindSchemaCol1 n (_:< ST "" "" cs) = FindCol n cs
+FindSchemaCol1 n _                 = Nothing
 
 ||| Looks up a - possibly qualified - column name in a schema.
 |||
@@ -191,10 +207,14 @@ SchemaHasCol : Schema -> String -> Bool
 SchemaHasCol [<]       s = False
 SchemaHasCol (sx :< x) s = any ((s==) . name) x.cols || SchemaHasCol sx s
 
+--------------------------------------------------------------------------------
+-- Shared Columns
+--------------------------------------------------------------------------------
+
 ||| A column used in a `JOIN ... USING` statement: The column name must
 ||| appear in both schemata.
 public export
-record JColumn (s : Schema) (t : Table) where
+record JColumn (s : Schema) (t : SQLTable) where
   constructor JC
   name       : String
   {auto 0 p1 : SchemaHasCol s name === True}
@@ -204,9 +224,107 @@ namespace JColumn
   public export %inline
   fromString :
        {0 s       : Schema}
-    -> {0 t       : Table}
+    -> {0 t       : SQLTable}
     -> (name      : String)
     -> {auto 0 p1 : SchemaHasCol s name === True}
     -> {auto 0 p2 : IsJust (FindCol name t.cols)}
     -> JColumn s t
   fromString = JC
+
+--------------------------------------------------------------------------------
+-- Idris Tables
+--------------------------------------------------------------------------------
+
+||| A table of values together with a fitting header
+public export
+record Table a where
+  constructor T
+  {auto torow : ToRow a}
+  header : LAll (const String) (ToRowTypes a)
+  rows   : List a
+
+hexChar : Bits8 -> Char
+hexChar 0 = '0'
+hexChar 1 = '1'
+hexChar 2 = '2'
+hexChar 3 = '3'
+hexChar 4 = '4'
+hexChar 5 = '5'
+hexChar 6 = '6'
+hexChar 7 = '7'
+hexChar 8 = '8'
+hexChar 9 = '9'
+hexChar 10 = 'a'
+hexChar 11 = 'b'
+hexChar 12 = 'c'
+hexChar 13 = 'd'
+hexChar 14 = 'e'
+hexChar _  = 'f'
+
+export %inline
+quote : Char
+quote = '\''
+
+||| Encodes a `ByteString` as an SQL literal.
+|||
+||| Every byte is encodec with two hexadecimal digits, and the
+||| whole string is wrapped in single quotes prefixed with an "X".
+|||
+||| For instance, `encodeBytes (fromList [0xa1, 0x77])` yields the
+||| string "X'a177'".
+export
+encodeBytes : ByteString -> String
+encodeBytes = pack . (\x => 'X'::quote::x) . foldr acc [quote]
+  where
+    %inline acc : Bits8 -> List Char -> List Char
+    acc b cs = hexChar (b `shiftR` 4) :: hexChar (b .&. 0xf) :: cs
+
+encode : (t : SqliteType) -> Maybe (IdrisType t) -> String
+encode _ Nothing  = "NULL"
+encode BLOB    (Just v) = encodeBytes v
+encode TEXT    (Just v) = v
+encode INTEGER (Just v) = show v
+encode REAL    (Just v) = show v
+
+pad : SqliteType -> Nat -> String -> String
+pad BLOB    k = padRight k ' '
+pad TEXT    k = padRight k ' '
+pad INTEGER k = padLeft k ' '
+pad REAL    k = padLeft k ' '
+
+center : Nat -> String -> String
+center k s =
+  let ki := cast {to = Integer} (k `minus` length s)
+      pl := ki `div` 2
+      pr := ki - pl
+   in replicate (cast pl) ' ' ++ s ++ replicate (cast pr) ' '
+
+maxLength : Nat -> String -> Nat
+maxLength n = max n . length
+
+barSep : LAll (const String) ts -> String
+barSep = fastConcat . intersperse " | " . forget
+
+bar : LAll (const Nat) ts -> String
+bar = fastConcat . intersperse "---" . map (`replicate` '-') . forget
+
+export
+prettyRows :
+     {ts : _}
+  -> (header : LAll (const String) ts)
+  -> (rows   : List (LAll (Maybe . IdrisType) ts))
+  -> String
+prettyRows h rs =
+  let cells   := map (hmapW encode) rs
+      lengths := foldl (hzipWith maxLength) (hconst 0) (h :: cells)
+      rows    := map (barSep . hzipWithW pad lengths) cells
+      header  := barSep $ hzipWith center lengths h
+   in fastUnlines (header :: bar lengths :: rows)
+
+export
+prettyTable : Table a -> String
+prettyTable (T h rs) = prettyRows h (map toRow rs)
+
+export %inline
+printTable : HasIO io => Table a -> io ()
+printTable = putStrLn . prettyTable

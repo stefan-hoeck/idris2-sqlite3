@@ -11,7 +11,7 @@ import Enum
 %language ElabReflection
 
 public export
-Units : Table
+Units : SQLTable
 Units =
   table "units"
   [ C "unit_id" INTEGER
@@ -20,7 +20,7 @@ Units =
   ]
 
 public export
-Employees : Table
+Employees : SQLTable
 Employees =
   table "employees"
     [ C "employee_id" INTEGER
@@ -30,7 +30,7 @@ Employees =
     ]
 
 public export
-Molecules : Table
+Molecules : SQLTable
 Molecules =
   table "molecules"
     [ C "molecule_id" INTEGER
@@ -41,7 +41,7 @@ Molecules =
     ]
 
 public export
-Files : Table
+Files : SQLTable
 Files =
   table "files"
     [ C "file_id" INTEGER
@@ -161,7 +161,7 @@ insertFile = insert Files ["content"]
 -- Query
 --------------------------------------------------------------------------------
 
-export
+public export
 mol : Expr [<Molecules] BOOL -> Query (WithID Molecule)
 mol x =
   SELECT
@@ -169,11 +169,11 @@ mol x =
     [<FROM Molecules]
   `WHERE` x
 
-export
+public export
 file : Expr [<Files] BOOL -> Query (WithID File)
 file x = SELECT ["file_id", "content"] [<FROM Files] `WHERE` x
 
-export
+public export
 employee : Query (WithID $ Employee String)
 employee =
   SELECT
@@ -184,7 +184,7 @@ employee =
   `WHERE`    ("e.salary" > 3000.0)
   `ORDER_BY` [ASC "e.salary", ASC "e.name"]
 
-export
+public export
 unitStats : LQuery [String,Bits32,Salary,Salary,Salary]
 unitStats =
   SELECT
@@ -201,7 +201,7 @@ unitStats =
     `HAVING`   ("num_employees" > 3)
     `ORDER_BY` [ASC "average_salary"]
 
-export
+public export
 heads : Query (OrgUnit String)
 heads =
   SELECT
@@ -210,7 +210,7 @@ heads =
     ,  JOIN (Units `AS` "u") `ON` ("e.employee_id" == "u.head")
     ]
 
-export
+public export
 nonHeads : LQuery [Bits32, String]
 nonHeads =
   SELECT
@@ -221,7 +221,7 @@ nonHeads =
     `WHERE`    IS NULL "u.head"
     `ORDER_BY` [ASC "e.name"]
 
-export
+public export
 tuples : LQuery [String,Double,Double,MolType]
 tuples =
   SELECT

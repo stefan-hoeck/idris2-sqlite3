@@ -6,7 +6,7 @@ import Data.ByteString
 import Data.String
 import Data.Vect
 import Sqlite3.Types
-import public Data.List.Quantifiers
+import public Data.List.Quantifiers.Extra
 
 %default total
 
@@ -352,99 +352,3 @@ splitAll []          [] = []
 splitAll (xs :: xss) ys =
   let (zs,r) := splitAt xs ys
    in zs :: splitAll xss r
-
---------------------------------------------------------------------------------
--- Printing Tables
---------------------------------------------------------------------------------
-
-hexChar : Bits8 -> Char
-hexChar 0 = '0'
-hexChar 1 = '1'
-hexChar 2 = '2'
-hexChar 3 = '3'
-hexChar 4 = '4'
-hexChar 5 = '5'
-hexChar 6 = '6'
-hexChar 7 = '7'
-hexChar 8 = '8'
-hexChar 9 = '9'
-hexChar 10 = 'a'
-hexChar 11 = 'b'
-hexChar 12 = 'c'
-hexChar 13 = 'd'
-hexChar 14 = 'e'
-hexChar _  = 'f'
-
-export %inline
-quote : Char
-quote = '\''
-
-||| Encodes a `ByteString` as an SQL literal.
-|||
-||| Every byte is encodec with two hexadecimal digits, and the
-||| whole string is wrapped in single quotes prefixed with an "X".
-|||
-||| For instance, `encodeBytes (fromList [0xa1, 0x77])` yields the
-||| string "X'a177'".
-export
-encodeBytes : ByteString -> String
-encodeBytes = pack . (\x => 'X'::quote::x) . foldr acc [quote]
-  where
-    %inline acc : Bits8 -> List Char -> List Char
-    acc b cs = hexChar (b `shiftR` 4) :: hexChar (b .&. 0xf) :: cs
-
-encode : (t : SqliteType) -> Maybe (IdrisType t) -> String
-encode _ Nothing  = "NULL"
-encode BLOB    (Just v) = encodeBytes v
-encode TEXT    (Just v) = v
-encode INTEGER (Just v) = show v
-encode REAL    (Just v) = show v
-
-pad : SqliteType -> Nat -> String -> String
-pad BLOB    k = padRight k ' '
-pad TEXT    k = padRight k ' '
-pad INTEGER k = padLeft k ' '
-pad REAL    k = padLeft k ' '
-
-export
-printTable :
-     (ts : List SqliteType)
-  -> List (LAll (Maybe . IdrisType) ts)
-  -> String
-printTable ts vs =
-  let cells   := map (printRow ts) vs
-      lengths := foldl maxLengths (zeros ts) cells
-      rows    := map (alignColumns [<] ts lengths) cells
-   in fastUnlines rows
-
-  where
-    zeros : (xs : List SqliteType) -> LAll (Prelude.const Nat) xs
-    zeros []        = []
-    zeros (_ :: xs) = 0 :: zeros xs
-
-    printRow :
-         (xs : List SqliteType)
-      -> LAll (Maybe . IdrisType) xs
-      -> LAll (Prelude.const String) xs
-    printRow []        []      = []
-    printRow (x :: xs) (y::ys) = encode x y :: printRow xs ys
-
-    maxLengths :
-         LAll (Prelude.const Nat) xs
-      -> LAll (Prelude.const String) xs
-      -> LAll (Prelude.const Nat) xs
-    maxLengths = zipPropertyWith (\n,s => max n $ length s)
-
-    alignColumns :
-         SnocList String
-      -> (xs : List SqliteType)
-      -> LAll (Prelude.const Nat) xs
-      -> LAll (Prelude.const String) xs
-      -> String
-    alignColumns ss [] [] [] = fastConcat . intersperse " | " $ ss <>> []
-    alignColumns ss (x :: xs) (y::ys) (z::zs) =
-      alignColumns (ss :< pad x y z) xs ys zs
-
-export
-printRows : ToRow a => List a -> String
-printRows = printTable (ToRowTypes a) . map toRow

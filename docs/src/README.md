@@ -29,16 +29,16 @@ while each unit has a supervisor, who are themselves employees:
 
 ```idris
 public export
-Units : Table
+Units : SQLTable
 Units =
   table "units"
-  [ C "unit_id" INTEGER
-  , C "name"    TEXT
-  , C "head"    INTEGER
-  ]
+    [ C "unit_id" INTEGER
+    , C "name"    TEXT
+    , C "head"    INTEGER
+    ]
 
 public export
-Employees : Table
+Employees : SQLTable
 Employees =
   table "employees"
     [ C "employee_id" INTEGER
@@ -245,10 +245,11 @@ app = withDB ":memory:" $ do
     , insertEmployee $ E "Valeri" 5010.0 1
     , insertEmployee $ E "Ronja" 4010.0 1
     ]
-  es <- query employee 1000
-  traverse_ printLn es
-  ss <- query unitStats 1000
-  traverse_ printLn ss
+  putStrLn "\nEmployees:"
+  queryTable employee 1000 >>= printTable
+
+  putStrLn "\nUnit stats:"
+  queryTable unitStats 1000 >>= printTable
 
 main : IO ()
 main = runApp handlers app

@@ -64,7 +64,7 @@ basic:
 
 ```idris
 public export
-Students : Table
+Students : SQLTable
 Students =
   table "students"
     [ C "student_id" INTEGER
@@ -73,7 +73,7 @@ Students =
     ]
 ```
 
-As you can see, a `Table` consists of a name and a list of columns,
+As you can see, a `SQLTable` consists of a name and a list of columns,
 where each column again has a name and an associated SQLite type.
 
 Actually, a table is a record of three field, where the third field
@@ -85,7 +85,7 @@ Here are the other tables we are going to use:
 
 ```idris
 public export
-Problems : Table
+Problems : SQLTable
 Problems =
   table "problems"
     [ C "problem_id"   INTEGER
@@ -94,7 +94,7 @@ Problems =
     ]
 
 public export
-Exams : Table
+Exams : SQLTable
 Exams =
   table "exams"
     [ C "exam_id"      INTEGER
@@ -104,7 +104,7 @@ Exams =
     ]
 
 public export
-ExamProblems : Table
+ExamProblems : SQLTable
 ExamProblems =
   table "exam_problems"
     [ C "problem_id"   INTEGER
@@ -112,7 +112,7 @@ ExamProblems =
     ]
 
 public export
-StudentProblems : Table
+StudentProblems : SQLTable
 StudentProblems =
   table "student_problems"
     [ C "problem_id"   INTEGER
@@ -164,7 +164,7 @@ a data constructor or function, so that the commands and expressions
 we write in Idris typically resemble the corresponding SQL expressions
 quite closely.
 
-Besides a `Table` argument, `CREATE_TABLE` takes a list of
+Besides a `SQLTable` argument, `CREATE_TABLE` takes a list of
 table constraints of type `Sqlite3.Cmd.Constraint`, which is indexed by
 the table for which we define the constraints. And this is where the
 interesting stuff begins: Whenever we use a string literal to identify
@@ -289,7 +289,7 @@ by the default proof search limit: We can lookup names in very
 large lists of columns. For instance:
 
 ```idris
-Tbl : Table
+Tbl : SQLTable
 Tbl =
   table "foo" $
     map (\n => C (prim__cast_Bits8String n) INTEGER) [0..55]
@@ -316,7 +316,7 @@ but this is what we currently have.
 
 In addition to `ListColType`, there is also function
 `TableColType`, which does exactly the same thing but for
-the columns wrapped up in a value of type `Table`. The
+the columns wrapped up in a value of type `SQLTable`. The
 interesting thing is, that we can now define a data type
 for typed column names (called `Sqlite3.Table.TColumn`),
 that represents a column in a table indexed by the column's
@@ -374,7 +374,7 @@ necessary to achieve similar results.
 Once one understands how name resolution behaves for columns
 and tables, it is only a small step to understanding name
 resolution for column names in schemata. A `Schema` is just
-a type alias for `SnocList Table`. We use a `SnocList` here
+a type alias for `SnocList SQLTable`. We use a `SnocList` here
 instead of a `List`, because when defining a query via a
 `SELECT` statement, the schema is assembled from left to
 right via the `FROM` part and possibly via any named
@@ -409,7 +409,7 @@ unqualifiedName1 = "email"
 
 -- using an unqualified name in a schema with an unnamed table
 -- at the end is OK
-unqualifiedName2 : Expr [<Students,T "" "" [C "total" REAL]] REAL
+unqualifiedName2 : Expr [<Students, ST "" "" [C "total" REAL]] REAL
 unqualifiedName2 = "total"
 ```
 
@@ -1185,25 +1185,20 @@ app =
     putStrLn "Populating the database"
     populateDB
 
-    putStrLn "\nMissing problem points"
-    ips <- query invalidPoints 1000
-    putStrLn $ printRows ips
+    putStrLn "\nInvalid problem points"
+    queryTable invalidPoints 1000 >>= printTable
 
     putStrLn "\nInvalid email addresses"
-    email <- query invalidEmail 1000
-    putStrLn $ printRows email
+    queryTable invalidEmail 1000 >>= printTable
 
     putStrLn "\nStudent-problem combos without points:"
-    nps <- query noPointsYet 1000
-    putStrLn $ printRows nps
+    queryTable noPointsYet 1000 >>= printTable
 
     putStrLn "\nPoints per student and exam:"
-    tot <- query totPoints 1000
-    putStrLn $ printRows tot
+    queryTable totPoints 1000 >>= printTable
 
     putStrLn "\nFailed exams:"
-    failed <- query failed 1000
-    putStrLn $ printRows failed
+    queryTable failed 1000 >>= printTable
 ```
 
 All that's left to do is to provide the actual `main` function.

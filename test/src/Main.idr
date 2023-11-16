@@ -56,32 +56,26 @@ app = withDB ":memory:" $ do
     , insertEmployee $ E "Valeri" 5010.0 1
     , insertEmployee $ E "Ronja" 4010.0 1
     ] ++ fromList (insertFile . file <$> [0..255])
-  ms <- query (mol TRUE) 1000
-  putStrLn $ printRows ms
+
+  queryTable (mol TRUE) 1000 >>= printTable
   putStrLn ""
 
-  fs <- query (file TRUE `LIMIT` 20) 1000
-  traverse_ (putStrLn . encodeBytes . content . value) fs
+  queryTable (file TRUE `LIMIT` 20) 1000 >>= printTable
   putStrLn ""
 
-  es <- query employee 1000
-  putStrLn $ printRows es
+  queryTable employee 1000 >>= printTable
   putStrLn ""
 
-  hs <- query heads 1000
-  putStrLn $ printRows hs
+  queryTable heads 1000 >>= printTable
   putStrLn ""
 
-  ts <- query tuples 1000
-  putStrLn $ printRows ts
+  queryTable tuples 1000 >>= printTable
   putStrLn ""
 
-  ps <- query nonHeads 1000
-  putStrLn $ printRows ps
+  queryTable nonHeads 1000 >>= printTable
   putStrLn ""
 
-  ss <- query unitStats 1000
-  putStrLn $ printRows ss
+  queryTable unitStats 1000 >>= printTable
   putStrLn ""
 
 main : IO ()

@@ -114,6 +114,23 @@ parameters {auto has : Has SqlError es}
       runCommands []      = pure ()
       runCommands (c::cs) = cmd c >> runCommands cs
 
+  ||| Runs the given query and accumulates at most `n` rows.
   export %inline
-  query : {auto db : DB} -> Query t -> Nat -> App es (List t)
+  query : DB => Query t -> (n : Nat) -> App es (List t)
   query q = selectRows (encodeQuery q)
+
+  ||| Runs the given query and accumulates at most `n` rows.
+  |||
+  ||| The result is stored in a `Table` with a proper header of
+  ||| column names.
+  export
+  queryTable :
+       {auto db : DB}
+    -> {auto tr : ToRow t}
+    -> (q : Query t)
+    -> {auto 0 prf : ToRowTypes t === FromRowTypes t}
+    -> Nat
+    -> App es (Table t)
+  queryTable {prf} q n = do
+    rs <- query q n
+    pure (T (rewrite prf in hmap columnName q.columns) rs)

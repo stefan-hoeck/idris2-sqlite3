@@ -8,6 +8,7 @@ brief        = "Idris2 bindings to the sqlite3 API"
 depends = base >= 0.6.0
         , elab-util
         , bytestring
+        , quantifiers-extra
 
 sourcedir = "src"
 

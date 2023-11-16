@@ -19,7 +19,7 @@ toExprs {ts = t::ts} (v::vs) = maybe NULL (Lit t) v :: toExprs vs
 
 ||| A single name-value pair in an `UPDATE` statement.
 public export
-record Val (t : Table) where
+record Val (t : SQLTable) where
   constructor V
   name        : String
   {auto 0 prf : IsJust (FindCol name t.cols)}
@@ -30,7 +30,7 @@ record Val (t : Table) where
 ||| `ToCell` implementation.
 public export %inline
 (.=) :
-     {0 t        : Table}
+     {0 t        : SQLTable}
   -> {auto to    : ToCell a}
   -> (name       : String)
   -> {auto 0 prf : IsJust (FindCol name t.cols)}
@@ -41,21 +41,21 @@ public export %inline
 
 ||| Column and table constraints to be used when creating a new table.
 public export
-data Constraint : Table -> Type where
+data Constraint : SQLTable -> Type where
   NOT_NULL      : {0 x : _} -> TColumn t x -> Constraint t
   AUTOINCREMENT : {0 x : _} -> TColumn t x -> Constraint t
   UNIQUE        : {0 xs : _} -> LAll (TColumn t) xs -> Constraint t
   PRIMARY_KEY   : {0 xs : _} -> LAll (TColumn t) xs -> Constraint t
   FOREIGN_KEY   :
        {0 xs : _}
-    -> (s       : Table)
+    -> (s       : SQLTable)
     -> LAll (TColumn t) xs
     -> LAll (TColumn s) xs
     -> Constraint t
 
   CHECK         : Expr [<t] BOOL -> Constraint t
   DEFAULT       :
-       {0 t        : Table}
+       {0 t        : SQLTable}
     -> (s          : String)
     -> {auto 0 prf : IsJust (FindCol s t.cols)}
     -> (expr       : Expr [<t] (TableColType s t))
@@ -83,12 +83,12 @@ data Cmd : CmdType -> Type where
   ||| It is recommended to use a combination of `CREATE_TABLE` and
   ||| `IF_NOT_EXISTS` instead of using this constructor directly.
   CreateTable :
-       (t           : Table)
+       (t           : SQLTable)
     -> (attrs       : List (Constraint t))
     -> (ifNotExists : Bool)
     -> Cmd TCreate
 
-  DropTable : (t : Table) -> (ifExists : Bool) -> Cmd TDrop
+  DropTable : (t : SQLTable) -> (ifExists : Bool) -> Cmd TDrop
 
   ||| Information required to insert data into a table.
   |||
@@ -98,7 +98,7 @@ data Cmd : CmdType -> Type where
   ||| consider using function `insert` instead.
   INSERT :
        {0 ts : List SqliteType}
-    -> (t    : Table)
+    -> (t    : SQLTable)
     -> (cols : LAll (TColumn t) ts)
     -> (vals : LAll (Expr [<t]) ts)
     -> Cmd TInsert
@@ -115,21 +115,21 @@ data Cmd : CmdType -> Type where
   ||| consider using function `replace` instead.
   REPLACE :
        {0 ts : List SqliteType}
-    -> (t : Table)
+    -> (t : SQLTable)
     -> (cols : LAll (TColumn t) ts)
     -> (vals : LAll (Expr [<t]) ts)
     -> Cmd TInsert
 
   ||| Information required to update values in table.
   UPDATE :
-       (t      : Table)
+       (t      : SQLTable)
     -> (set    : List (Val t))
     -> (where_ : Expr [<t] BOOL)
     -> Cmd TUpdate
 
   ||| Information required to delete values from a table.
   DELETE :
-       (t      : Table)
+       (t      : SQLTable)
     -> (where_ : Expr [<t] BOOL)
     -> Cmd TDelete
 
@@ -138,7 +138,7 @@ data Cmd : CmdType -> Type where
 export
 insert :
     {auto as : ToRow v}
-  ->(t       : Table)
+  ->(t       : SQLTable)
   -> LAll (TColumn t) (ToRowTypes v)
   -> (value : v)
   -> Cmd TInsert
@@ -149,7 +149,7 @@ insert t cs value = INSERT t cs (toExprs $ toRow value)
 export
 replace :
     {auto as : ToRow v}
-  ->(t       : Table)
+  ->(t       : SQLTable)
   -> LAll (TColumn t) (ToRowTypes v)
   -> (value : v)
   -> Cmd TInsert
@@ -191,37 +191,37 @@ IF_EXISTS (DropTable t _) = DropTable t True
 
 ||| Convenience constructor for the `CreateTable` command
 public export %inline
-CREATE_TABLE : (t : Table) -> List (Constraint t) -> Cmd TCreate
+CREATE_TABLE : (t : SQLTable) -> List (Constraint t) -> Cmd TCreate
 CREATE_TABLE t as = CreateTable t as False
 
 ||| Convenience constructor for the `DropTable` command
 public export %inline
-DROP_TABLE : (t : Table) -> Cmd TDrop
+DROP_TABLE : (t : SQLTable) -> Cmd TDrop
 DROP_TABLE t = DropTable t False
 
 public export
-0 JoinPred : Schema -> Table -> Type
+0 JoinPred : Schema -> SQLTable -> Type
 JoinPred s t = Either (List $ JColumn  s t) (Expr (s:<t) BOOL)
 
 public export
-data Join : (s : Schema) -> (t : Table) -> Type where
+data Join : (s : Schema) -> (t : SQLTable) -> Type where
   JOIN :
-       {0 t0 : Table}
+       {0 t0 : SQLTable}
     -> {0 s  : Schema}
-    -> (t : Table)
+    -> (t : SQLTable)
     -> JoinPred (s:<t0) t
     -> Join (s:<t0) t
 
   OUTER_JOIN :
-       {0 t0 : Table}
+       {0 t0 : SQLTable}
     -> {0 s  : Schema}
-    -> (t : Table)
+    -> (t : SQLTable)
     -> JoinPred (s:<t0) t
     -> Join (s:<t0) t
 
-  CROSS_JOIN : {0 t0 : _} -> {0 s : _} -> (t : Table) -> Join (s:<t0) t
+  CROSS_JOIN : {0 t0 : _} -> {0 s : _} -> (t : SQLTable) -> Join (s:<t0) t
 
-  FROM : (t : Table) -> Join [<] t
+  FROM : (t : SQLTable) -> Join [<] t
 
 public export %inline
 USING : (JoinPred s t -> Join s t) -> List (JColumn s t) -> Join s t
@@ -305,6 +305,17 @@ namespace NameExpr
     -> NamedExpr s (SchemaColType col s)
   fromString col = Col col `AS` ""
 
+||| Extracts the column name we use to reference a named
+||| expression.
+|||
+||| If a custom name has been set, this will be returned. Otherwise,
+||| if the expression references a table column, that columns (possibly
+||| qualified) name will be returned.
+export
+columnName : NamedExpr s t -> String
+columnName (AS (Col col) "") = col
+columnName (AS _         n)  = n
+
 ||| Computes a list of named and typed columns from a list of
 ||| name expressions.
 |||
@@ -330,7 +341,7 @@ ExprSchema : {s : _} -> {ts : _} -> LAll (NamedExpr s) ts -> Schema
 ExprSchema xs =
   case ExprColumns xs of
     [] => s
-    cs => s :< T "" "" cs
+    cs => s :< ST "" "" cs
 
 ||| Different types of `SELECT` commands.
 public export

@@ -162,7 +162,7 @@ names sc (TC c :: cs) = names (sc :< c) cs
 encodeDflt : Expr s t -> String
 encodeDflt x         = "DEFAULT (\{encodeExpr x})"
 
-references : (t : Table) -> LAll (TColumn t) xs -> String
+references : (t : SQLTable) -> LAll (TColumn t) xs -> String
 references t cs = "REFERENCES \{t.name} (\{names [<] cs})"
 
 encConstraint : Constraints -> Constraint t -> Constraints
@@ -252,8 +252,8 @@ joinPred (Right x) = do
   ez <- encodeExprP x
   pure "ON \{ez}"
 
-tbl : Table -> String
-tbl (T n a _) = if n == a then n else "\{n} AS \{a}"
+tbl : SQLTable -> String
+tbl (ST n a _) = if n == a then n else "\{n} AS \{a}"
 
 join : Join s t -> ParamStmt
 join (JOIN t p) = do

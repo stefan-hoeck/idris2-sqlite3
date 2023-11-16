@@ -65,15 +65,27 @@ totPoints =
     , SUM "sp.points" `AS` "ex_points"
     , SUM "p.points"  `AS` "total"
     ]
-    [< FROM (ExamProblems    `AS` "ep")
-    ,  JOIN (Exams           `AS` "e")  `USING` ["exam_id"]
-    ,  JOIN (Problems        `AS` "p")  `USING` ["problem_id"]
-    ,  CROSS_JOIN (Students  `AS` "s")
+    [< FROM (ExamProblems   `AS` "ep")
+    ,  JOIN (Exams          `AS` "e")  `USING` ["exam_id"]
+    ,  JOIN (Problems       `AS` "p")  `USING` ["problem_id"]
+    ,  CROSS_JOIN (Students `AS` "s")
     ,  OUTER_JOIN (StudentProblems `AS` "sp") `USING` ["problem_id", "student_id"]
     ]
   `GROUP_BY` ["e.exam_id","s.student_id"]
   `HAVING`   (MIN (COALESCE ["sp.points", (-1)]) >= 0)
   `ORDER_BY` [ASC "e.exam_id", ASC "ex_points"]
+
+app : App [SqlError] ()
+app =
+  withDB ":memory:" $ do
+    putStrLn "Populating the database"
+    populateDB
+
+    putStrLn "\nPoints per student and exam:"
+    queryTable totPoints 1000 >>= printTable
+
+main : IO ()
+main = runApp [printLn] app
 ```
 
 <!-- vi: filetype=idris2:syntax=markdown

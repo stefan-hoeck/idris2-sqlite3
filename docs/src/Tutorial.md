@@ -902,6 +902,7 @@ which takes an argument of type `Cmds` (a specialized list
 for grouping commands independent of their type index).
 
 ```idris
+export
 populateDB : Has SqlError es => DB => App es ()
 populateDB =
   cmds $

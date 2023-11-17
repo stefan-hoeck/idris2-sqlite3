@@ -139,3 +139,11 @@ data SqlError : Type where
   NoMoreData    : SqlError
 
 %runElab derive "SqlError" [Show,Eq]
+
+export
+Interpolation SqlError where
+  interpolate (ResultError x m)   = "SQL error \{show x}: \{m}"
+  interpolate (DecodingError x s) = "Error when decoding \{show x}: \{s}"
+  interpolate (TypeMismatch x f)  = "Type mismatch: Expected \{show x} but found \{show f}"
+  interpolate (NullPointer s)     = "Exception when decoding \{s}: Value is NULL"
+  interpolate NoMoreData          = "Exception when decoding row: No more data"

@@ -262,10 +262,9 @@ from this project's root directory.
 
 ## Next Steps
 
-I'm planning to write a proper tutorial for this library explaining
-in detail how to use it and also discussing some of the design
-decisions that led to the current implementation. This is still
-work in progress, so stay tuned.
+There is a [tutorial](docs/src/Tutorial.md) that describes in more detail
+what is currently available as well as how and why things are implemented
+the way the currently are.
 
 ## Credits
 

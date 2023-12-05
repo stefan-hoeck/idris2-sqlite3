@@ -34,6 +34,7 @@ app = withDB ":memory:" $ do
     , IF_NOT_EXISTS createFiles
     , IF_NOT_EXISTS createUnits
     , IF_NOT_EXISTS createEmployees
+    , IF_NOT_EXISTS createEdges
     , insertMol $ M "Ethanol"    (Just "64-17-5") (Just 46.069) Compound
     , insertMol $ M "Strychnine" (Just "57-24-9") (Just 334.419) Compound
     , insertMol $ M "Atropine"   (Just "51-55-8") (Just 289.375) Compound
@@ -55,6 +56,14 @@ app = withDB ":memory:" $ do
     , insertEmployee $ E "Gundi" 2050.0 1
     , insertEmployee $ E "Valeri" 5010.0 1
     , insertEmployee $ E "Ronja" 4010.0 1
+    , insertEdge "A" "B"
+    , insertEdge "B" "C"
+    , insertEdge "B" "D"
+    , insertEdge "C" "E"
+    , insertEdge "C" "F"
+    , insertEdge "D" "F"
+    , insertEdge "F" "G"
+    , insertEdge "B" "F"
     ] ++ fromList (insertFile . file <$> [0..255])
 
   queryTable (mol TRUE) 1000 >>= printTable
@@ -77,6 +86,8 @@ app = withDB ":memory:" $ do
 
   queryTable unitStats 1000 >>= printTable
   putStrLn ""
+
+  queryTable parents 1000 >>= printTable
 
 main : IO ()
 main = runApp handlers app

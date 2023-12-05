@@ -349,6 +349,7 @@ record Query (t : Type) where
   [noHints]
   constructor Q
   {auto fromRow : FromRow t}
+  distinct      : Bool
   schema        : Schema
   from          : From schema
   columns       : LAll (NamedExpr schema) (FromRowTypes t)
@@ -376,7 +377,16 @@ SELECT :
   -> LAll (NamedExpr s) (FromRowTypes t)
   -> From s
   -> Query t
-SELECT xs from = Q s from xs TRUE TRUE [] [] Nothing 0
+SELECT xs from = Q False s from xs TRUE TRUE [] [] Nothing 0
+
+public export %inline
+SELECT_DISTINCT :
+     {s : _}
+  -> {auto fromRow : FromRow t}
+  -> LAll (NamedExpr s) (FromRowTypes t)
+  -> From s
+  -> Query t
+SELECT_DISTINCT xs from = Q True s from xs TRUE TRUE [] [] Nothing 0
 
 public export %inline
 GROUP_BY : (q : Query t) -> List (GroupingTerm $ ExprSchema q.columns) -> Query t

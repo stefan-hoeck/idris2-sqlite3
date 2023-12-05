@@ -318,11 +318,14 @@ encodeHaving x    = do
 ||| inserted as placeholders for literal values where appropriate.
 export
 encodeQuery : Query ts -> ParamStmt
-encodeQuery (Q _ from vs where_ having group_by order_by lim off) = do
+encodeQuery (Q distinct _ from vs where_ having group_by order_by lim off) = do
   vstr <- namedExprs [<] vs
   fstr <- encodeFrom from
   wh   <- encodeExprP where_
   hav  <- encodeHaving having
   grp  <- encodeOrd "GROUP BY" (map ord group_by)
   ord  <- encodeOrd "ORDER BY" order_by
-  pure "SELECT \{vstr} \{fstr} WHERE \{wh} \{grp} \{hav} \{ord} \{limit lim off}"
+  let rest = "\{vstr} \{fstr} WHERE \{wh} \{grp} \{hav} \{ord} \{limit lim off}"
+  pure $ case distinct of
+    True  => "SELECT DISTINCT \{rest}"
+    False => "SELECT \{rest}"

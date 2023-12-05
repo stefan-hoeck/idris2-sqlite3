@@ -48,6 +48,14 @@ Files =
     , C "content" BLOB
     ]
 
+public export
+Edges : SQLTable
+Edges =
+  table "edges"
+    [ C "u" TEXT
+    , C "v" TEXT
+    ]
+
 export
 createMolecules : Cmd TCreate
 createMolecules =
@@ -90,6 +98,15 @@ createEmployees =
     , NOT_NULL "salary"
     , NOT_NULL "unit_id"
     , UNIQUE ["name"]
+    ]
+
+export
+createEdges : Cmd TCreate
+createEdges =
+  CREATE_TABLE Edges
+    [ PRIMARY_KEY ["u", "v"]
+    , NOT_NULL "u"
+    , NOT_NULL "v"
     ]
 
 --------------------------------------------------------------------------------
@@ -156,6 +173,10 @@ insertMol = insert Molecules ["name", "casnr", "molweight", "type"]
 export
 insertFile : File -> Cmd TInsert
 insertFile = insert Files ["content"]
+
+export
+insertEdge : String -> String -> Cmd TInsert
+insertEdge u v = INSERT Edges ["u", "v"] [val u, val v]
 
 --------------------------------------------------------------------------------
 -- Query
@@ -232,3 +253,10 @@ tuples =
     ]
     `WHERE` ("m1.molweight" < "m2.molweight")
     `OFFSET` 2
+
+public export
+parents : LQuery [String]
+parents =
+  SELECT_DISTINCT
+    ["u"]
+    [< FROM $ Edges `AS` "e"]

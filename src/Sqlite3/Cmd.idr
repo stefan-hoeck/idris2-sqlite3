@@ -39,6 +39,38 @@ public export %inline
   -> Val t
 (.=) name v = V name (rewrite eq in val v)
 
+
+namespace ForeignKey
+  ||| Foreign Key Actions
+  public export
+  data Action
+    = SET_NULL
+    | SET_DEFAULT
+    | CASCADE
+    | RESTRICT
+    | NO_ACTION
+
+  ||| Foreign key constraint which supports actions.
+  public export
+  record Details (xs : List SqliteType ) (t : SQLTable) where
+    constructor MkDetails
+    target      : SQLTable
+    my_cols     : LAll (TColumn t) xs
+    target_cols : LAll (TColumn target) xs
+    on_update   : Action
+    on_delete   : Action
+
+  ||| Add ON_UPDATE action to the given foreign key constraint.
+  public export
+  ON_UDPATE : Details xs t -> Action -> Details xs t
+  ON_UDPATE details action = { on_update := action } details
+
+  ||| Add ON_DELETE action to this foreign key constraint
+  public export
+  ON_DELETE : Details xs t -> Action -> Details xs t
+  ON_DELETE details action = { on_delete := action } details
+
+
 ||| Column and table constraints to be used when creating a new table.
 public export
 data Constraint : SQLTable -> Type where
@@ -46,13 +78,7 @@ data Constraint : SQLTable -> Type where
   AUTOINCREMENT : {0 x : _} -> TColumn t x -> Constraint t
   UNIQUE        : {0 xs : _} -> LAll (TColumn t) xs -> Constraint t
   PRIMARY_KEY   : {0 xs : _} -> LAll (TColumn t) xs -> Constraint t
-  FOREIGN_KEY   :
-       {0 xs : _}
-    -> (s       : SQLTable)
-    -> LAll (TColumn t) xs
-    -> LAll (TColumn s) xs
-    -> Constraint t
-
+  ForeignKey    : {0 xs : _} -> ForeignKey.Details xs t -> Constraint t
   CHECK         : Expr [<t] BOOL -> Constraint t
   DEFAULT       :
        {0 t        : SQLTable}
@@ -60,6 +86,20 @@ data Constraint : SQLTable -> Type where
     -> {auto 0 prf : IsJust (FindCol s t.cols)}
     -> (expr       : Expr [<t] (TableColType s t))
     -> Constraint t
+
+
+||| Convenience eAPI to Construct a foreign key constraint.
+public export
+FOREIGN_KEY   :
+     {0 xs : _}
+  -> {0 t : SQLTable}
+  -> (s   : SQLTable)
+  -> LAll (TColumn t) xs
+  -> LAll (TColumn s) xs
+  -> Constraint t
+FOREIGN_KEY s a b = ForeignKey $ MkDetails s a b NO_ACTION NO_ACTION
+
+
 
 ||| Index used to distinguish different types of commands.
 |||

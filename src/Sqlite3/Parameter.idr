@@ -165,6 +165,24 @@ encodeDflt x         = "DEFAULT (\{encodeExpr x})"
 references : (t : SQLTable) -> LAll (TColumn t) xs -> String
 references t cs = "REFERENCES \{t.name} (\{names [<] cs})"
 
+action : ForeignKey.Action -> String
+action SET_NULL    = "SET NULL"
+action SET_DEFAULT = "SET DEFAULT"
+action CASCADE     = "CASCADE"
+action RESTRICT    = "RESTRICT"
+action NO_ACTION   = "NO ACTION"
+
+actions : ForeignKey.Action -> ForeignKey.Action -> String
+actions NO_ACTION NO_ACTION = ""
+actions update    NO_ACTION = " ON UPDATE \{action update}"
+actions NO_ACTION delete    = " ON DELETE \{action delete}"
+actions update    delete    = " ON UPDATE \{action update} ON DELETE \{action update}"
+
+encDetails : Constraints -> ForeignKey.Details xs t -> Constraints
+encDetails y (MkDetails s [p] ys u d) = addCol y p.name "\{references s ys}\{actions u d}" 
+encDetails y (MkDetails s xs  ys u d) = addTbl y
+  "FOREIGN KEY (\{names [<] xs}) \{references s ys} \{actions u d}"
+
 encConstraint : Constraints -> Constraint t -> Constraints
 encConstraint y (NOT_NULL $ TC n)      = addCol y n"NOT NULL"
 encConstraint y (AUTOINCREMENT $ TC n) = addCol y n "AUTOINCREMENT"
@@ -174,9 +192,7 @@ encConstraint y (DEFAULT s expr)       = addCol y s (encodeDflt expr)
 encConstraint y (UNIQUE xs)            = addTbl y "UNIQUE (\{names [<] xs})"
 encConstraint y (PRIMARY_KEY xs)       = addTbl y "PRIMARY KEY (\{names [<] xs})"
 encConstraint y (CHECK x)              = addTbl y "CHECK (\{encodeExpr x})"
-encConstraint y (FOREIGN_KEY s [p] ys) = addCol y p.name (references s ys)
-encConstraint y (FOREIGN_KEY s xs ys)  =
-  addTbl y "FOREIGN KEY (\{names [<] xs}) \{references s ys}"
+encConstraint y (ForeignKey details)   = encDetails y details
 
 ine : Bool -> String
 ine True  = "IF NOT EXISTS"

@@ -82,7 +82,7 @@ createUnits =
   CREATE_TABLE Units
     [ PRIMARY_KEY ["unit_id"]
     , AUTOINCREMENT "unit_id"
-    , FOREIGN_KEY' Employees ["head"] ["employee_id"] $ [ON_UPDATE CASCADE]
+    , FOREIGN_KEY' Employees ["head"] ["employee_id"] $ [ON_DELETE CASCADE]
     , NOT_NULL "name"
     , UNIQUE ["name"]
     ]

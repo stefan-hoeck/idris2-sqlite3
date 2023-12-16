@@ -82,7 +82,7 @@ createUnits =
   CREATE_TABLE Units
     [ PRIMARY_KEY ["unit_id"]
     , AUTOINCREMENT "unit_id"
-    , FOREIGN_KEY Employees ["head"] ["employee_id"]
+    , FOREIGN_KEY' Employees ["head"] ["employee_id"] $ [ON_UPDATE CASCADE]
     , NOT_NULL "name"
     , UNIQUE ["name"]
     ]
@@ -177,6 +177,10 @@ insertFile = insert Files ["content"]
 export
 insertEdge : String -> String -> Cmd TInsert
 insertEdge u v = INSERT Edges ["u", "v"] [val u, val v]
+
+export
+deleteEmployee : String -> Cmd TDelete
+deleteEmployee name = DELETE Employees ("name" == val name)
 
 --------------------------------------------------------------------------------
 -- Query

@@ -165,6 +165,21 @@ encodeDflt x         = "DEFAULT (\{encodeExpr x})"
 references : (t : SQLTable) -> LAll (TColumn t) xs -> String
 references t cs = "REFERENCES \{t.name} (\{names [<] cs})"
 
+encAction : Action -> String
+encAction SET_NULL    = "SET NULL"
+encAction SET_DEFAULT = "SET DEFAULT"
+encAction CASCADE     = "CASCADE"
+encAction RESTRICT    = "RESTRICT"
+encAction NO_ACTION   = "NO ACTION"
+
+encEvent : Event -> String
+encEvent (ON_UPDATE a) = "ON UPDATE \{encAction a}"
+encEvent (ON_DELETE a) = "ON DELETE \{encAction a}"
+
+encEvents : List Event -> String
+encEvents [] = ""
+encEvents xs = " \{unwords $ map encEvent xs}"
+
 encConstraint : Constraints -> Constraint t -> Constraints
 encConstraint y (NOT_NULL $ TC n)      = addCol y n"NOT NULL"
 encConstraint y (AUTOINCREMENT $ TC n) = addCol y n "AUTOINCREMENT"
@@ -174,9 +189,9 @@ encConstraint y (DEFAULT s expr)       = addCol y s (encodeDflt expr)
 encConstraint y (UNIQUE xs)            = addTbl y "UNIQUE (\{names [<] xs})"
 encConstraint y (PRIMARY_KEY xs)       = addTbl y "PRIMARY KEY (\{names [<] xs})"
 encConstraint y (CHECK x)              = addTbl y "CHECK (\{encodeExpr x})"
-encConstraint y (FOREIGN_KEY s [p] ys) = addCol y p.name (references s ys)
-encConstraint y (FOREIGN_KEY s xs ys)  =
-  addTbl y "FOREIGN KEY (\{names [<] xs}) \{references s ys}"
+encConstraint y (ForeignKey s [p] ys as) = addCol y p.name "\{references s ys}\{encEvents as}"
+encConstraint y (ForeignKey s xs  ys as) = addTbl y
+  "FOREIGN KEY (\{names [<] xs}) \{references s ys} \{encEvents as}"
 
 ine : Bool -> String
 ine True  = "IF NOT EXISTS"

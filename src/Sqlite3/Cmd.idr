@@ -39,6 +39,21 @@ public export %inline
   -> Val t
 (.=) name v = V name (rewrite eq in val v)
 
+
+||| Foreign Key Actions
+public export
+data Action
+  = SET_NULL
+  | SET_DEFAULT
+  | CASCADE
+  | RESTRICT
+  | NO_ACTION
+
+public export
+data Event
+  = ON_UPDATE Action
+  | ON_DELETE Action
+
 ||| Column and table constraints to be used when creating a new table.
 public export
 data Constraint : SQLTable -> Type where
@@ -46,13 +61,14 @@ data Constraint : SQLTable -> Type where
   AUTOINCREMENT : {0 x : _} -> TColumn t x -> Constraint t
   UNIQUE        : {0 xs : _} -> LAll (TColumn t) xs -> Constraint t
   PRIMARY_KEY   : {0 xs : _} -> LAll (TColumn t) xs -> Constraint t
-  FOREIGN_KEY   :
+  ForeignKey    :
        {0 xs : _}
-    -> (s       : SQLTable)
+    -> {0 t : SQLTable}
+    -> (s   : SQLTable)
     -> LAll (TColumn t) xs
     -> LAll (TColumn s) xs
+    -> List Event
     -> Constraint t
-
   CHECK         : Expr [<t] BOOL -> Constraint t
   DEFAULT       :
        {0 t        : SQLTable}
@@ -60,6 +76,29 @@ data Constraint : SQLTable -> Type where
     -> {auto 0 prf : IsJust (FindCol s t.cols)}
     -> (expr       : Expr [<t] (TableColType s t))
     -> Constraint t
+
+||| Convenience API to construct a foreign key constraint.
+public export
+FOREIGN_KEY :
+     {0 xs : _}
+  -> {0 t : SQLTable}
+  -> (s   : SQLTable)
+  -> LAll (TColumn t) xs
+  -> LAll (TColumn s) xs
+  -> Constraint t
+FOREIGN_KEY s a b = ForeignKey s a b []
+
+||| Constructs a foreign key constraint with actions
+public export
+FOREIGN_KEY' :
+     {0 xs : _}
+  -> {0 t : SQLTable}
+  -> (s   : SQLTable)
+  -> LAll (TColumn t) xs
+  -> LAll (TColumn s) xs
+  -> List Event
+  -> Constraint t
+FOREIGN_KEY' = ForeignKey
 
 ||| Index used to distinguish different types of commands.
 |||

@@ -89,5 +89,10 @@ app = withDB ":memory:" $ do
 
   queryTable parents 1000 >>= printTable
 
+  cmds $ [ deleteEmployee "Ben" ]
+
+  queryTable heads 1000 >>= printTable
+
+
 main : IO ()
 main = runApp handlers app

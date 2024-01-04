@@ -275,12 +275,6 @@ public export
 -- ToRow
 --------------------------------------------------------------------------------
 
-||| Concatenation of heterogeneous lists
-public export
-(++) : LAll f xs -> LAll f ys -> LAll f (xs ++ ys)
-(++) []        qs = qs
-(++) (p :: ps) qs = p :: (ps ++ qs)
-
 ||| Inteface for converting an Idris value from a row in a table.
 public export
 interface ToRow a where

@@ -30,7 +30,7 @@ appList : SnocList TTImp -> TTImp
 appList = foldr acc `(Data.List.Quantifiers.All.Nil)
   where
     acc : TTImp -> TTImp -> TTImp
-    acc t s = `(Sqlite3.Marshall.(++) ~(t) ~(s))
+    acc t s = `(Data.List.Quantifiers.All.(++) ~(t) ~(s))
 
 x : Name
 x = "x"

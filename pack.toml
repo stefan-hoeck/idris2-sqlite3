@@ -23,11 +23,11 @@ ipkg   = "docs.ipkg"
 [custom.all.array]
 type   = "github"
 url    = "https://github.com/stefan-hoeck/idris2-array"
-commit = "latest:buffer"
+commit = "latest:main"
 ipkg   = "array.ipkg"
 
 [custom.all.bytestring]
 type   = "github"
 url    = "https://github.com/stefan-hoeck/idris2-bytestring"
-commit = "latest:buffer"
+commit = "latest:main"
 ipkg   = "bytestring.ipkg"

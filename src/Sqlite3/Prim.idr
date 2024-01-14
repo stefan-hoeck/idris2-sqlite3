@@ -3,7 +3,6 @@
 module Sqlite3.Prim
 
 import Data.Buffer
-import Data.Buffer.Indexed
 import Data.ByteString
 import Data.List.Quantifiers
 

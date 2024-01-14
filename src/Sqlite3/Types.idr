@@ -1,6 +1,6 @@
 module Sqlite3.Types
 
-import Data.Buffer.Indexed
+import Data.ByteString
 import Derive.Prelude
 
 %default total

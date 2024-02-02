@@ -66,6 +66,9 @@ app = withDB ":memory:" $ do
     , insertEdge "B" "F"
     ] ++ fromList (insertFile . file <$> [0..255])
 
+  lastID <- liftIO sqlite3LastInsertRowID
+  putStrLn "Last insert ID: \{show lastID}"
+
   queryTable (mol TRUE) 1000 >>= printTable
   putStrLn ""
 

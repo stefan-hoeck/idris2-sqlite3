@@ -153,6 +153,9 @@ prim__sqlite3_bind_parameter_index : Ptr StmtPtr -> String -> PrimIO Bits32
 %foreign (idris_sqlite "sqlite3_bind_null")
 prim__sqlite3_bind_null : Ptr StmtPtr -> (ix : Bits32) -> PrimIO Int
 
+%foreign (idris_sqlite "sqlite3_last_insert_rowid")
+prim__sqlite3_last_insert_rowid : Ptr DBPtr -> PrimIO Int64
+
 --------------------------------------------------------------------------------
 --          Pointers
 --------------------------------------------------------------------------------
@@ -224,6 +227,11 @@ sqlFail = sqlFailRes . fromInt
 --------------------------------------------------------------------------------
 --          Accessing Columns
 --------------------------------------------------------------------------------
+
+||| Returns the generated row ID of the last successfull INSERT statement.
+export %inline
+sqlite3LastInsertRowID : DB => IO Int64
+sqlite3LastInsertRowID @{D p} = primIO $ prim__sqlite3_last_insert_rowid p
 
 ||| Get the current column count for the given statement.
 export %inline

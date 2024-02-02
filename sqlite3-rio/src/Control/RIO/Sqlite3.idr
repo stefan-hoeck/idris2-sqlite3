@@ -1,6 +1,5 @@
 module Control.RIO.Sqlite3
 
-import Control.Monad.State
 import public Control.RIO.App
 import public Sqlite3
 import public Data.List.Quantifiers

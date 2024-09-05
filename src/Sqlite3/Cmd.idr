@@ -8,7 +8,7 @@ import Sqlite3.Types
 
 %default total
 
-infix 1 .=
+export infix 1 .=
 
 ||| We can always convert a list of marshallable Idris values to
 ||| a list of SQL expressions.
@@ -407,7 +407,7 @@ public export
 0 LQuery : List Type -> Type
 LQuery = Query . HList
 
-infixl 7 `GROUP_BY`,`ORDER_BY`,`WHERE`, `LIMIT`, `OFFSET`, `HAVING`
+export infixl 7 `GROUP_BY`,`ORDER_BY`,`WHERE`, `LIMIT`, `OFFSET`, `HAVING`
 
 public export %inline
 SELECT :

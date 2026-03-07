@@ -1,0 +1,13 @@
+package sqlite3-streams
+version      = 0.0.1
+authors      = "stefan-hoeck"
+readme       = "README.md"
+license      = "BSD-3 Clause"
+brief        = "Streaming SQlite results"
+
+depends = sqlite3
+        , streams
+
+sourcedir = "src"
+
+modules = FS.Sqlite3

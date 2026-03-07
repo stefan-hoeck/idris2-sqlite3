@@ -16,7 +16,8 @@ module README
 
 import Data.WithID
 import Derive.Sqlite3
-import Control.RIO.Sqlite3
+import FS.Sqlite3
+import IO.Async.Loop.Posix
 
 %default total
 %language ElabReflection
@@ -208,7 +209,7 @@ unitStats =
 ```
 
 Finally, let's run some example code. We are going to use the
-`Control.RIO.App` effect type to get proper error handling.
+`Async` effect type to get proper error handling.
 We can wrap and run a list of commands in a single transaction
 by using the `cmds` utility. For querying the database, we
 can use `query`, which takes a `Query t` argument plus a
@@ -216,13 +217,7 @@ natural number corresponding to the maximal number of rows
 we want to collect and accumulate in a list.
 
 ```idris
-0 Errs : List Type
-Errs = [SqlError]
-
-handlers : All (Handler ()) Errs
-handlers = [ printLn ]
-
-app : App Errs ()
+app : Async e [SqlError] ()
 app = withDB ":memory:" $ do
   cmds $
     [ createUnits
@@ -251,8 +246,9 @@ app = withDB ":memory:" $ do
   putStrLn "\nUnit stats:"
   queryTable unitStats 1000 >>= printTable
 
+covering
 main : IO ()
-main = runApp handlers app
+main = simpleApp $ handle [printLn] app
 ```
 
 If you are using [pack](https://github.com/stefan-hoeck/idris2-pack) for

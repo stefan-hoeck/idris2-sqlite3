@@ -10,7 +10,8 @@ module Tutorial
 
 import Data.String
 import Derive.Sqlite3
-import Control.RIO.Sqlite3
+import FS.Sqlite3
+import IO.Async.Loop.Posix
 
 %default total
 %language ElabReflection
@@ -839,7 +840,7 @@ there is also function `loadRows`. To keep the totality checker happy,
 we must provide an upper bound for the number of rows we want to
 collect.
 
-### sqlite3-rio: Utilities for working with `Control.RIO.App`
+### sqlite3-streams: Utilities for streaming and running in the `Async` monad
 
 When interacting with the world of SQLite, we typically use actions
 with a type like `IO (Either SqlError a)`, that is, we are doing `IO`
@@ -847,12 +848,9 @@ and we have error handling. One way to make this nicer to use would
 be to use the `EitherT` monad transformer from `Control.Monad.Either`.
 
 Another option is to use an effect type with proper error handling.
-Such a type is provided by the idris2-rio library, which
-comes with a very simple data type for stack-safe, effectful
-`IO` actions plus error handling called `RIO`. If we want to
-use a heterogeneous sum (from `Data.List.Quantifiers`) to group
-different types of errors, the name changes to `App`, and that is
-what we are going to use here.
+Such a type is provided by the idris2-async library, which
+comes with a powerful monad for running applications concurrently
+with proper error handling.
 
 We start with populating the database with some data. Below
 are lists of students, exams, problems, and links between
@@ -897,12 +895,12 @@ points : List (HList [Bits32,Bits32,Double])
 ```
 
 We can use these lists of data to generate and populate our
-tables. For this we use the `Control.RIO.Sqlite3.cmds` utility,
+tables. For this we use the `FS.Sqlite3.cmds` utility,
 which takes an argument of type `Cmds` (a specialized list
 for grouping commands independent of their type index).
 
 ```idris
-populateDB : Has SqlError es => DB => App es ()
+populateDB : Has SqlError es => DB => Async e es ()
 populateDB =
   cmds $
     [ createStudents
@@ -919,7 +917,7 @@ populateDB =
     ++ fromList (map (\x => insertExamProblem [2,x]) [6..9])
 ```
 
-Most `IO` actions in module `Control.RIO.Sqlite3` take an implicit
+Most `IO` actions in module `FS.Sqlite3` take an implicit
 `DB` argument: The database connection we are working with. They
 also need to be able to throw exceptions of type `SqlError`, therefore,
 the list `es` of error types in the type of `populateDB` must contain
@@ -927,7 +925,7 @@ the `SqlError` type, which is witnessed by the `Has SqlError es` proof.
 If you are writing many actions operating against an SQLite database,
 it can be convenient to move these two auto-implicit arguments to
 a `parameters` block. As an example, see the source code of
-`Control.RIO.Sqlite3` where this has been done with the `Has SqlError es`
+`FS.Sqlite3` where this has been done with the `Has SqlError es`
 proof.
 
 Just one more note about `cmds`: This `IO` action will run all
@@ -1161,7 +1159,7 @@ function for printing a warning for those student-problem
 combinations that have not yet been marked:
 
 ```idris
-warnPoints : HList [String,String,Double,Double] -> App es ()
+warnPoints : HList [String,String,Double,Double] -> Async e es ()
 warnPoints [n,t,p,pm] =
   putStrLn
     """
@@ -1179,7 +1177,7 @@ create and populate the tables and then run a bunch of
 queries and print their results:
 
 ```idris
-app : App [SqlError] ()
+app : Async e [SqlError] ()
 app =
   withDB ":memory:" $ do
     putStrLn "Populating the database"
@@ -1206,8 +1204,9 @@ We need to provide an error handler for each error type, then
 we are ready to go:
 
 ```idris
+covering
 main : IO ()
-main = runApp [printLn] app
+main = simpleApp $ handle [printLn] app
 ```
 
 And that is the end of this introduction. Please note that this

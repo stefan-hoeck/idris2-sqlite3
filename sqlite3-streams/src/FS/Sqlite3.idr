@@ -146,6 +146,11 @@ parameters {auto has : Has SqlError es}
   query : DB => Query t -> (n : Nat) -> Async e es (List t)
   query q = selectRows (encodeQuery q)
 
+  ||| Runs the given query and returns the first result (if any).
+  export %inline
+  query1 : DB => Query t -> Async e es (Maybe t)
+  query1 q = map (\case h::_ => Just h; [] => Nothing) $ query q 1
+
   ||| Streams the rows resulting from running the given query.
   export %inline
   queryRows : (cs : ChunkSize) => DB => Query t -> AsyncStream e es (List t)

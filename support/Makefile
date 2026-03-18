@@ -3,7 +3,7 @@ TARGET_VERSION ?= 0.0.1
 
 INSTALLDIR = ../lib
 
-LDFLAGS = -lsqlite3 --verbose
+LDFLAGS = -lsqlite3
 CPPFLAGS =
 
 CC_VERSION = $(shell $(CC) --version)

@@ -9,10 +9,9 @@ CPPFLAGS =
 CC_VERSION = $(shell $(CC) --version)
 
 ifeq ($(findstring clang,$(CC_VERSION)),clang)
- DYLIB_WORKAROUND = cp "${INSTALLDIR}/${TARGET}" "${INSTALLDIR}/${TARGET}.dylib"
+	DYLIB_WORKAROUND = cp "${INSTALLDIR}/${TARGET}" "${INSTALLDIR}/${TARGET}.dylib"
 else
- DYLIB_WORKAROUND = cp "${INSTALLDIR}/${TARGET}" "${INSTALLDIR}/${TARGET}.so"
- LDFLAGS += -fuse-ld=gold
+	DYLIB_WORKAROUND = cp "${INSTALLDIR}/${TARGET}" "${INSTALLDIR}/${TARGET}.so"
 endif
 
 SRCS = $(wildcard *.c)
@@ -21,7 +20,7 @@ OBJS = $(SRCS:.c=.o)
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CC) -shared $(LDFLAGS) -o $@ $^
+	$(CC) -shared -o $@ $^ $(LDFLAGS)
 
 .PHONY: clean
 

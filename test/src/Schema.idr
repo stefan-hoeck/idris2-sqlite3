@@ -158,7 +158,7 @@ record File where
 -- Create
 --------------------------------------------------------------------------------
 
-export
+public export
 insertUnit : OrgUnit Bits32 -> Cmd TInsert
 insertUnit = insert Units ["name", "head"]
 
@@ -208,6 +208,14 @@ employee =
     ]
   `WHERE`    ("e.salary" > 3000.0)
   `ORDER_BY` [ASC "e.salary", ASC "e.name"]
+
+public export
+allUnits : Query (WithID $ OrgUnit Bits32)
+allUnits =
+  SELECT
+    ["unit_id", "name", "head"]
+    [< FROM (Units)
+    ]
 
 public export
 unitStats : LQuery [String,Bits32,Salary,Salary,Salary]

@@ -87,13 +87,30 @@ parameters {auto has : Has SqlError es}
     pure $ Just v
 
 --------------------------------------------------------------------------------
--- Runnings Commands
+-- Running Commands
 --------------------------------------------------------------------------------
 
-  ||| Executes the given SQL command.
+  ||| Executes the given SQL statement and returns its result.
+  |||
+  ||| A regular command without a returning value has type `Statement t ()`,
+  ||| this type is aliased with `Cmd t` for backward compatibility.
+  |||
+  ||| Statements with a trailing `RETURNING` have a return value `a`, the
+  ||| first returned row is decoded and returned. `NoMoreData` is thrown
+  ||| if no row was returned.
   export %inline
-  cmd : DB => Cmd t -> App es ()
-  cmd = commit . encodeCmd
+  cmd : DB => (c : Statement t a) -> App es a
+  cmd c@(RETURNING {}) = do
+      (v :: _) <- selectRows (encodeCmd c) 1
+        | _ => throw NoMoreData
+      pure v
+  -- We need to match on everything individually to compute the correct return type
+  cmd c@(CreateTable {})          = commit (encodeCmd c)
+  cmd c@(DropTable {})            = commit (encodeCmd c)
+  cmd c@(INSERT {})               = commit (encodeCmd c)
+  cmd c@(REPLACE {})              = commit (encodeCmd c)
+  cmd c@(UPDATE {})               = commit (encodeCmd c)
+  cmd c@(DELETE {})               = commit (encodeCmd c)
 
   rollback : DB => HSum es -> App es a
   rollback x = ignore (withStmt "ROLLBACK TRANSACTION" step) >> fail x
@@ -133,3 +150,4 @@ parameters {auto has : Has SqlError es}
   queryTable {prf} q n = do
     rs <- query q n
     pure (T (rewrite prf in hmap columnName q.columns) rs)
+

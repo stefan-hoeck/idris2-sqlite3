@@ -232,6 +232,34 @@ updateVals sc (x :: xs) = do
   v <- encodeExprP x.val
   updateVals (sc :< "\{x.name} = \{v}") xs
 
+||| Encodes the body of an SQLite data management command, without
+||| a trailing semicolon. Used internally by `encodeCmd`.
+encodeCmdBody : Statement t a -> ParamStmt
+encodeCmdBody (CreateTable t cs ifNotExists) =
+  let CS m ts := foldl encConstraint (CS empty []) cs
+      cols    := encodeCols m t.cols
+      add     := commaSep id (cols ++ ts)
+   in pure "CREATE TABLE \{ine ifNotExists} \{t.name} (\{add})"
+encodeCmdBody (DropTable t ifExists) =
+   pure "DROP TABLE \{ie ifExists} \{t.name}"
+encodeCmdBody (INSERT t cs vs) = do
+  vstr <- exprs [<] vs
+  pure "INSERT INTO \{t.name} (\{insertCols [<] cs}) VALUES (\{vstr})"
+encodeCmdBody (REPLACE t cs vs) = do
+  vstr <- exprs [<] vs
+  pure "REPLACE INTO \{t.name} (\{insertCols [<] cs}) VALUES (\{vstr})"
+encodeCmdBody (UPDATE t vs wh) = do
+  vstr <- updateVals [<] vs
+  xstr <- encodeExprP wh
+  pure "UPDATE \{t.name} SET \{vstr} WHERE \{xstr}"
+encodeCmdBody (DELETE t wh) = do
+  xstr <- encodeExprP wh
+  pure "DELETE FROM \{t.name} WHERE \{xstr}"
+encodeCmdBody (RETURNING c rs) = do
+  bstr <- encodeCmdBody c
+  rstr <- namedExprs [<] rs
+  pure "\{bstr} RETURNING \{rstr}"
+
 ||| Encodes an SQLite data management command.
 |||
 ||| The command will be encoded as a string with parameters
@@ -239,27 +267,10 @@ updateVals sc (x :: xs) = do
 |||
 ||| `State ParamST` is used to keep track of the defined parameters.
 export
-encodeCmd : Cmd t -> ParamStmt
-encodeCmd (CreateTable t cs ifNotExists) =
-  let CS m ts := foldl encConstraint (CS empty []) cs
-      cols    := encodeCols m t.cols
-      add     := commaSep id (cols ++ ts)
-   in pure "CREATE TABLE \{ine ifNotExists} \{t.name} (\{add});"
-encodeCmd (DropTable t ifExists) =
-   pure "DROP TABLE \{ie ifExists} \{t.name};"
-encodeCmd (INSERT t cs vs) = do
-  vstr <- exprs [<] vs
-  pure "INSERT INTO \{t.name} (\{insertCols [<] cs}) VALUES (\{vstr});"
-encodeCmd (REPLACE t cs vs) = do
-  vstr <- exprs [<] vs
-  pure "REPLACE INTO \{t.name} (\{insertCols [<] cs}) VALUES (\{vstr});"
-encodeCmd (UPDATE t vs wh) = do
-  vstr <- updateVals [<] vs
-  xstr <- encodeExprP wh
-  pure "UPDATE \{t.name} SET \{vstr} WHERE \{xstr};"
-encodeCmd (DELETE t wh) = do
-  xstr <- encodeExprP wh
-  pure "DELETE FROM \{t.name} WHERE \{xstr};"
+encodeCmd : Statement t a -> ParamStmt
+encodeCmd c = do
+  s <- encodeCmdBody c
+  pure "\{s};"
 
 joinPred : JoinPred s t -> ParamStmt
 joinPred (Left u)  = pure "USING (\{commaSep name u})"
@@ -344,3 +355,4 @@ encodeQuery (Q distinct _ from vs where_ having group_by order_by lim off) = do
   pure $ case distinct of
     True  => "SELECT DISTINCT \{rest}"
     False => "SELECT \{rest}"
+

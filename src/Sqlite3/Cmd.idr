@@ -113,10 +113,50 @@ data CmdType : Type where
   TSelect : CmdType
   TUpdate : CmdType
 
+||| Witness that a command kind admits a trailing `RETURNING` clause.
+|||
+||| SQLite allows `RETURNING` on `INSERT`, `REPLACE`, `UPDATE` and
+||| `DELETE` statements
+public export
+data SupportsReturning : CmdType -> Type where
+  SRInsert : SupportsReturning TInsert
+  SRUpdate : SupportsReturning TUpdate
+  SRDelete : SupportsReturning TDelete
+
+||| A possibly-aliased SQL expression.
+public export
+record NamedExpr (s : Schema) (t : SqliteType) where
+  constructor AS
+  expr : Expr s t
+  name : String
+
+namespace NameExpr
+  public export %inline
+  fromString :
+       {s        : Schema}
+    -> (col      : String)
+    -> {auto 0 p : IsJust (FindSchemaCol col s)}
+    -> NamedExpr s (SchemaColType col s)
+  fromString col = Col col `AS` ""
+
+data Statement : CmdType -> Type -> Type
+
+||| Returns the table targeted by a statement.
+|||
+||| Mutually defined with `Statement` to use it in the `RETURNING` constructor
+public export
+cmdTable : Statement t a -> SQLTable
+
 ||| Data management commands for creating tables and
 ||| inserting, updating, or deleting rows in a table.
+|||
+||| The second index is the result type produced when running the
+||| command. Non-returning commands have result type `()`; commands
+||| with a trailing `RETURNING` clause have result type `a` decoded
+||| via `FromRow a`. For the common non-returning case, use the
+||| backward-compatible alias `Cmd t = Statement t ()`.
 public export
-data Cmd : CmdType -> Type where
+data Statement : CmdType -> Type -> Type where
   ||| Information used to create a new table.
   |||
   ||| It is recommended to use a combination of `CREATE_TABLE` and
@@ -125,9 +165,9 @@ data Cmd : CmdType -> Type where
        (t           : SQLTable)
     -> (attrs       : List (Constraint t))
     -> (ifNotExists : Bool)
-    -> Cmd TCreate
+    -> Statement TCreate ()
 
-  DropTable : (t : SQLTable) -> (ifExists : Bool) -> Cmd TDrop
+  DropTable : (t : SQLTable) -> (ifExists : Bool) -> Statement TDrop ()
 
   ||| Information required to insert data into a table.
   |||
@@ -140,7 +180,7 @@ data Cmd : CmdType -> Type where
     -> (t    : SQLTable)
     -> (cols : LAll (TColumn t) ts)
     -> (vals : LAll (Expr [<t]) ts)
-    -> Cmd TInsert
+    -> Statement TInsert ()
 
   ||| Information required to insert or replace data in a a table.
   |||
@@ -157,24 +197,58 @@ data Cmd : CmdType -> Type where
     -> (t : SQLTable)
     -> (cols : LAll (TColumn t) ts)
     -> (vals : LAll (Expr [<t]) ts)
-    -> Cmd TInsert
+    -> Statement TInsert ()
 
   ||| Information required to update values in table.
   UPDATE :
        (t      : SQLTable)
     -> (set    : List (Val t))
     -> (where_ : Expr [<t] BOOL)
-    -> Cmd TUpdate
+    -> Statement TUpdate ()
 
   ||| Information required to delete values from a table.
   DELETE :
        (t      : SQLTable)
     -> (where_ : Expr [<t] BOOL)
-    -> Cmd TDelete
+    -> Statement TDelete ()
+
+  ||| Appends a `RETURNING` clause to an `INSERT`, `REPLACE`,
+  ||| `UPDATE`, or `DELETE` command.
+  |||
+  ||| Given a statement that operates on a table given by `cmdTable`,
+  ||| `RETURNING` selects rows affected by that statements.
+  ||| Use in infix position to read like SQL:
+  |||
+  ||| ```idris
+  ||| INSERT employees ["name"] [E "Alice"] `RETURNING` ["employee_id"]
+  ||| ```
+  ||| Computing `cmdTable stmt` might be difficult, in that case, give the type
+  ||| of the statement on the left explicitly via a top-level definition.
+  RETURNING :
+       {auto fromRow : FromRow a}
+    -> {auto 0 prf   : SupportsReturning t}
+    -> (stmt         : Statement t ())
+    -> LAll (NamedExpr [<cmdTable stmt]) (FromRowTypes a)
+    -> Statement t a
+
+cmdTable (CreateTable t _ _) = t
+cmdTable (DropTable t _)     = t
+cmdTable (INSERT t _ _)      = t
+cmdTable (REPLACE t _ _)     = t
+cmdTable (UPDATE t _ _)      = t
+cmdTable (DELETE t _)        = t
+cmdTable (RETURNING c _)     = cmdTable c
+
+||| Backward-compatible alias for a non-returning command (a
+||| `Statement` with result type `()`). Existing code that writes
+||| `Cmd TInsert`, `Cmd TDelete`, etc. continues to work unchanged.
+public export
+0 Cmd : CmdType -> Type
+Cmd t = Statement t ()
 
 ||| Utility version of `INSERT` for those cases when you want to
 ||| insert an Idris value with a `ToRow` implementation.
-export
+public export %inline
 insert :
     {auto as : ToRow v}
   ->(t       : SQLTable)
@@ -185,7 +259,7 @@ insert t cs value = INSERT t cs (toExprs $ toRow value)
 
 ||| Utility version of `REPLACE` for those cases when you want to
 ||| replace an Idris value with a `ToRow` implementation.
-export
+public export %inline
 replace :
     {auto as : ToRow v}
   ->(t       : SQLTable)
@@ -195,8 +269,8 @@ replace :
 replace t cs value = REPLACE t cs (toExprs $ toRow value)
 
 namespace Cmds
-  ||| A list of different types of commands, with the
-  ||| command types being hidden.
+  ||| A list of side-effecting commands (commands that do not return
+  ||| rows), with the command types being hidden.
   public export
   data Cmds : Type where
     Nil  : Cmds
@@ -329,21 +403,6 @@ public export %inline
 ord : GroupingTerm s -> OrderingTerm s
 ord (G x c) = O x c NoAsc
 
-public export
-record NamedExpr (s : Schema) (t : SqliteType) where
-  constructor AS
-  expr : Expr s t
-  name : String
-
-namespace NameExpr
-  public export %inline
-  fromString :
-       {s        : Schema}
-    -> (col      : String)
-    -> {auto 0 p : IsJust (FindSchemaCol col s)}
-    -> NamedExpr s (SchemaColType col s)
-  fromString col = Col col `AS` ""
-
 ||| Extracts the column name we use to reference a named
 ||| expression.
 |||
@@ -450,3 +509,4 @@ LIMIT q n = {limit := Just n} q
 public export %inline
 OFFSET : (q : Query t) -> Nat -> Query t
 OFFSET q n = {offset := n} q
+

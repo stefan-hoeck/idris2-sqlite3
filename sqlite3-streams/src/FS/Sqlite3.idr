@@ -120,10 +120,24 @@ parameters {auto has : Has SqlError es}
 -- Runnings Commands
 --------------------------------------------------------------------------------
 
-  ||| Executes the given SQL command.
-  export %inline
-  cmd : DB => Cmd t -> Async e es ()
-  cmd = commit . encodeCmd
+  ||| Executes the given SQL statement and returns its result.
+  |||
+  ||| `Cmd t` are statements without a returning value alias of`Statement t ()`.
+  ||| For statements with a trailing `RETURNING` clause, the first returned row
+  ||| is decoded and returned. `NoMoreData` is thrown if no row was returned.
+  export
+  cmd : DB => (c : Statement t a) -> Async e es a
+  cmd c@(RETURNING {}) = do
+      (v :: _) <- selectRows (encodeCmd c) 1
+        | _ => throw NoMoreData
+      pure v
+  -- We need to match on everything individually to compute the correct return type
+  cmd c@(CreateTable {})          = commit (encodeCmd c)
+  cmd c@(DropTable {})            = commit (encodeCmd c)
+  cmd c@(INSERT {})               = commit (encodeCmd c)
+  cmd c@(REPLACE {})              = commit (encodeCmd c)
+  cmd c@(UPDATE {})               = commit (encodeCmd c)
+  cmd c@(DELETE {})               = commit (encodeCmd c)
 
   rollback : DB => HSum es -> Async e es a
   rollback x = ignore (withStmt "ROLLBACK TRANSACTION" step) >> fail x

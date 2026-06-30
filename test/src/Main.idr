@@ -97,5 +97,10 @@ app = withDB ":memory:" $ do
   queryTable heads 1000 >>= printTable
 
 
+  queryTable allUnits 1000 >>= printTable
+  lastID : Integer <- cmd (insertUnit (U "mole" 3) `RETURNING` ["unit_id"])
+  putStrLn "Last insert ID: \{show lastID}"
+  queryTable allUnits 1000 >>= printTable
+
 main : IO ()
 main = runApp handlers app

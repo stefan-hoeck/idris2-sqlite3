@@ -13,6 +13,10 @@ export
 Resource (Async e) DB where
   cleanup = liftIO . sqliteClose'
 
+toRes : Chunk a -> UnfoldRes () () (List a)
+toRes (More xs) = More xs ()
+toRes (Done xs) = Last () xs
+
 parameters {auto has : Has SqlError es}
 
   export %inline
@@ -110,8 +114,7 @@ parameters {auto has : Has SqlError es}
     -> AsyncStream e es (List a)
   rows {cs = CS sz} st =
     resource (openBoundStmt st) $ \_ =>
-      unfoldEvalMaybe $
-        (\case [] => Nothing; xs => Just xs) <$> injectIO (loadRows sz)
+      unfoldEval () $ \_ => toRes <$> injectIO (loadChunk {a} sz)
 
 --------------------------------------------------------------------------------
 -- Runnings Commands

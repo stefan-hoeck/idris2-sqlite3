@@ -425,6 +425,41 @@ loadRow = do
       Right cs <- go k (col +1) ss | Left err => pure (Left err)
       pure (Right $ c :: cs)
 
+public export
+data Chunk : Type -> Type where
+  More : List a -> Chunk a
+  Done : List a -> Chunk a
+
+export
+Cast (Chunk a) (List a) where
+  cast (More vs) = vs
+  cast (Done vs) = vs
+
+||| Tries to extract up to `max` lines of data from a prepared SQL statement.
+|||
+||| In case of a success, the result distinguishes between the query being
+||| exhausted (the internal call of `sqliteStep` returned `SQLITE_DONE`) and
+||| potentially more data being available.
+export
+loadChunk :
+     {auto db : DB}
+  -> {auto s  : Stmt}
+  -> {auto ps : FromRow a}
+  -> (max     : Nat)
+  -> IO (Either SqlError $ Chunk a)
+loadChunk = go [<]
+  where
+    go : SnocList a -> Nat -> IO (Either SqlError $ Chunk a)
+    go sr 0     = pure (Right $ More $ sr <>> [])
+    go sr (S k) = do
+      SQLITE_ROW <- sqliteStep s
+        | SQLITE_DONE => pure (Right $ Done $ sr <>> [])
+        | res         => sqlFailRes res
+      Right r  <- loadRow | Left err => pure (Left err)
+      case fromRow {a} r of
+        Right v  => go (sr :< v) k
+        Left err => pure (Left err)
+
 ||| Tries to extract up to `max` lines of data from a prepared SQL statement.
 export
 loadRows :
@@ -433,15 +468,4 @@ loadRows :
   -> {auto ps : FromRow a}
   -> (max     : Nat)
   -> IO (Either SqlError $ List a)
-loadRows = go [<]
-  where
-    go : SnocList a -> Nat -> IO (Either SqlError $ List a)
-    go sr 0     = pure (Right $ sr <>> [])
-    go sr (S k) = do
-      SQLITE_ROW <- sqliteStep s
-        | SQLITE_DONE => pure (Right $ sr <>> [])
-        | res         => sqlFailRes res
-      Right r  <- loadRow | Left err => pure (Left err)
-      case fromRow {a} r of
-        Right v  => go (sr :< v) k
-        Left err => pure (Left err)
+loadRows n = map cast <$> loadChunk {a} n

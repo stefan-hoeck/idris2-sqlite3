@@ -35,12 +35,6 @@ appList = foldr acc `(Data.List.Quantifiers.All.Nil)
 x : Name
 x = "x"
 
-matchEither : String -> (res : TTImp) -> Name -> TTImp
-matchEither x res y =
-  `(case fromCell ~(varStr x) of
-     Right ~(bindVar y) => ~(res)
-     Left e             => Left e)
-
 parameters (nms : List Name)
 
   toRowClause : Con n vs -> Clause
